@@ -49,7 +49,7 @@ class Composite_data_element(Item):
         print('function: {}'.format(self.function))
         print('data elements:')
         for data_element in self.data_elements:
-            print('{}|{}'.format(data_element[0], data_element[1]))
+            print('{}|{}|{}'.format(data_element[0], data_element[1], data_element[2]))
         print('used in messages:')
         for segment in self.used_in_segments:
             print('{}|'.format(segment), end='')
@@ -225,7 +225,19 @@ def get_item_from_soup(soup, type):
             if pattern.search(prev_sibling):
                 data_elem_pos_tmp = pattern.findall(prev_sibling)
                 data_elem_pos = data_elem_pos_tmp[0].strip()
-                data_element = (data_elem_pos, a_tag.text)
+                # find status of data element in composite directory
+                if type == 'cd':
+                    #print('follow-sib: |{}|'.format(a_tag.next_sibling))
+                    if isinstance(a_tag.next_sibling, str):
+                        pattern = re.compile(r' [A-Z]  ')
+                        resultTmp = pattern.search(a_tag.next_sibling)
+                        if resultTmp is not None:
+                            status = resultTmp.group().strip()
+                        else:
+                            status = None
+                    data_element = (data_elem_pos, a_tag.text, status)
+                else:
+                    data_element = (data_elem_pos, a_tag.text)
                 data_elements.append(data_element)
         # find and extract message names from <a> tags
         elif type == 'sd' and len(a_tag.text) == 6:
@@ -313,9 +325,7 @@ def get_data_element_from_soup(soup, type):
                     code_list.append(CodeItem(value, code_name, desc))
                 else:
                     code_list[-1].description += '. ' + ' '.join(code_block_str.split())
-
     item = Data_element(tag, name, function, format, code_list)
-
     return item
 
 def main():
@@ -338,29 +348,29 @@ def main():
         print(verbose_text)
 
     # Get all segments from segment directory and write them in list
-    # tags = get_tags_from_website('tr', 'd01b', 'sd')
-    # segments = create_item_list('tr', 'd01b', tags, 'sd')
-    # for segment in segments:
-    #     segment.info()
-    #     print('------------------------------')
+    tags = get_tags_from_website('tr', 'd01b', 'sd')
+    segments = create_item_list('tr', 'd01b', tags, 'sd')
+    for segment in segments:
+        segment.info()
+        print('------------------------------')
 
     # Get all composite data elements from composite data element directory and write them in list
-    # tags = get_tags_from_website('tr', 'd01b', 'cd')
-    # composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
-    # for composite_data_element in composite_data_elements:
-    #     composite_data_element.info()
-    #     print('------------------------------')
+    tags = get_tags_from_website('tr', 'd01b', 'cd')
+    composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
+    for composite_data_element in composite_data_elements:
+        composite_data_element.info()
+        print('------------------------------')
 
     # Get all data elements from element directory and write them in list
-    # tags = get_tags_from_website('tr', 'd01b', 'ed')
-    # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
-    # for data_element in data_elements:
-    #     data_element.info()
-    #     print('------------------------------')
+    tags = get_tags_from_website('tr', 'd01b', 'ed')
+    data_elements = create_item_list('tr', 'd01b', tags, 'ed')
+    for data_element in data_elements:
+        data_element.info()
+        print('------------------------------')
 
     # TEST creation of specific data element
     #item = create_item('tr', 'd01a', '1131', 'ed')
-    item = create_item('tr', 'd01a', '3229', 'ed')
+    item = create_item('tr', 'd01a', '3477', 'ed')
     item.info()
 
     print('--------------------------')
@@ -371,7 +381,7 @@ def main():
 
     print('--------------------------')
     # TEST creation of composite data element
-    item = create_item('tr', 'd01a', 'C002', 'cd')
+    item = create_item('tr', 'd01a', 'C090', 'cd')
     #item = create_item('tr', 'd01a', '3229', 'ed')
     item.info()
 
