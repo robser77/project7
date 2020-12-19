@@ -5,9 +5,8 @@ import time
 from bs4 import BeautifulSoup
 
 #TODO start
-# - check if data_element_of soup should go to get_composite_data_element_from_soup
-# - merge try
-
+# Adding Data Element Cross Reference?
+# Add Note Attribute to Data Element? (only appears in some data elments ex:3229)
 #TODO end
 
 base_URL = 'https://service.unece.org/trade/untdid/'
@@ -252,35 +251,22 @@ def get_data_element_from_soup(soup, type):
        build and return a segment, composite or data element object."""
     #extract tag and name
     tag_name = soup.find("h3")
-    if tag_name.text.lstrip().startswith('X') or tag_name.text.lstrip().startswith('-'):
+    if tag_name.text.lstrip().startswith('X') or \
+       tag_name.text.lstrip().startswith('|') or \
+       tag_name.text.lstrip().startswith('-'):
         tag_name_tmp = tag_name.text.lstrip()[3:]
     else:
         tag_name_tmp = tag_name.text
 
-    if type == 'sd':
-        tag = tag_name_tmp.lstrip()[:3]
-        name = tag_name_tmp.lstrip()[3:].lstrip()
-    elif type == 'cd':
-        tag = tag_name_tmp.lstrip()[:4]
-        name = tag_name_tmp.lstrip()[4:].lstrip()
-    elif type == 'ed':
-        tag = tag_name_tmp.lstrip()[:4]
-        name_tmp = tag_name_tmp.lstrip()[4:].strip()
-        name = name_tmp[:-3].strip()
+    tag = tag_name_tmp.lstrip()[:4]
+    name_tmp = tag_name_tmp.lstrip()[4:].strip()
+    name = name_tmp[:-3].strip()
 
-    #extract function/description (and format for data element)
-    if type != 'ed':
-        function_tmp_1 = tag_name.next_sibling
-        function_tmp_2 = ''.join(i for i in function_tmp_1 if not i.isdigit()).strip()
-        if type == 'sd':
-            function = (' '.join(function_tmp_2.split())).replace('Function: ','')
-        if type == 'cd' or type == 'ed':
-            function = (' '.join(function_tmp_2.split())).replace('Desc: ','')
-    else:
-        function_format_tmp = tag_name.next_sibling
-        function_format_tmp = function_format_tmp.strip().split('Repr:')
-        function = function_format_tmp[0].strip()[6:]
-        format = function_format_tmp[1].strip()
+    function_format_tmp = tag_name.next_sibling
+    function_format_tmp = function_format_tmp.strip().split('Repr:')
+    function = function_format_tmp[0].strip()[6:]
+    format_tmp = function_format_tmp[1].strip()
+    format = format_tmp.split('\r\n\r\n')[0]
 
     #extract codes values, name and description
     textNodes = soup.findAll(text=True)
@@ -308,13 +294,6 @@ def get_data_element_from_soup(soup, type):
                         code_value_name_tmp += line
                 # some codes contain notes which will be in own code code_block
                 # here we need to filter them.
-
-
-
-                #print('splitted: |{}|'.format(code_value_name_tmp.split('   ')))
-                #print('len: |{}|'.format(len(code_value_name_tmp.split('   '))))
-
-
                 if not code_value_name_tmp.startswith('Note:'):
                     # codes which will be removed are flagged with "X".
                     # I need a logic to handle them, but some codes also start with "X".
@@ -331,16 +310,8 @@ def get_data_element_from_soup(soup, type):
                         code_name = code_value_name_tmp.split('   ')[1].lstrip()
 
                     desc = ' '.join(code_desc_tmp.split())
-
-                    #print('splitted: |{}|'.format(code_value_name_tmp.split('   ')))
-                    #print('value: |{}|'.format(value))
-                    #print('code_name: |{}|'.format(code_name))
-                    #print('desc: |{}|'.format(desc))
-
                     code_list.append(CodeItem(value, code_name, desc))
                 else:
-                    #print('code_block_str: |{}|'.format(code_block_str))
-                    #print('code_block_str: |{}|'.format(' '.join(code_block_str.split())))
                     code_list[-1].description += '. ' + ' '.join(code_block_str.split())
 
     item = Data_element(tag, name, function, format, code_list)
@@ -367,36 +338,30 @@ def main():
         print(verbose_text)
 
     # Get all segments from segment directory and write them in list
-    tags = get_tags_from_website('tr', 'd01b', 'sd')
-    segments = create_item_list('tr', 'd01b', tags, 'sd')
-    for segment in segments:
-        segment.info()
-        print('------------------------------')
+    # tags = get_tags_from_website('tr', 'd01b', 'sd')
+    # segments = create_item_list('tr', 'd01b', tags, 'sd')
+    # for segment in segments:
+    #     segment.info()
+    #     print('------------------------------')
 
     # Get all composite data elements from composite data element directory and write them in list
-    tags = get_tags_from_website('tr', 'd01b', 'cd')
-    composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
-    for composite_data_element in composite_data_elements:
-        composite_data_element.info()
-        print('------------------------------')
+    # tags = get_tags_from_website('tr', 'd01b', 'cd')
+    # composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
+    # for composite_data_element in composite_data_elements:
+    #     composite_data_element.info()
+    #     print('------------------------------')
 
     # Get all data elements from element directory and write them in list
-    tags = get_tags_from_website('tr', 'd01b', 'ed')
-    data_elements = create_item_list('tr', 'd01b', tags, 'ed')
-    for data_element in data_elements:
-        data_element.info()
-        print('------------------------------')
+    # tags = get_tags_from_website('tr', 'd01b', 'ed')
+    # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
+    # for data_element in data_elements:
+    #     data_element.info()
+    #     print('------------------------------')
 
     # TEST creation of specific data element
     #item = create_item('tr', 'd01a', '1131', 'ed')
-    #item = create_item('tr', 'd01a', '5463', 'ed')
+    #item = create_item('tr', 'd01a', '3229', 'ed')
     #item.info()
-
-
-
-    # tags = get_tags_from_website('tr', 'd01a', 'ed')
-    # for tag in tags:
-    #     print('tag: |{}|'.format(tag))
 
 if __name__ == "__main__":
     main()
