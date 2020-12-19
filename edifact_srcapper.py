@@ -219,7 +219,7 @@ def get_item_from_soup(soup, type):
     a_tags = soup.find_all("a")
     for a_tag in a_tags:
         # find and extract data elements from <a> tags
-        if len(a_tag.text) == 4 and a_tag.text.isdigit():
+        if len(a_tag.text) == 4:
             prev_sibling = a_tag.previous_sibling
             pattern = re.compile(r'\s[0-9]{3}\s')
             if pattern.search(prev_sibling):
@@ -360,8 +360,20 @@ def main():
 
     # TEST creation of specific data element
     #item = create_item('tr', 'd01a', '1131', 'ed')
+    item = create_item('tr', 'd01a', '3229', 'ed')
+    item.info()
+
+    print('--------------------------')
+    # TEST creation of specific segment
+    item = create_item('tr', 'd01a', 'BGM', 'sd')
     #item = create_item('tr', 'd01a', '3229', 'ed')
-    #item.info()
+    item.info()
+
+    print('--------------------------')
+    # TEST creation of composite data element
+    item = create_item('tr', 'd01a', 'C002', 'cd')
+    #item = create_item('tr', 'd01a', '3229', 'ed')
+    item.info()
 
 if __name__ == "__main__":
     main()
