@@ -20,15 +20,16 @@ class Item():
         self.function = function
 
 class Segment(Item):
-    def __init__(self, tag, name, function, data_elements, used_in_messages):
+    def __init__(self, tag, name, function, data_elements, used_in_messages, url):
         super().__init__(tag, name, function)
         self.data_elements = data_elements
         self.used_in_messages = used_in_messages
-
+        self.url = url
     def info(self):
         print('tag: {}'.format(self.tag))
         print('name: {}'.format(self.name))
         print('function: {}'.format(self.function))
+        print('url: {}'.format(self.url))
         print('data elements:')
         for data_element in self.data_elements:
             print('{}|{}|{}'.format(data_element[0], data_element[1], data_element[2]))
@@ -38,30 +39,33 @@ class Segment(Item):
         print()
 
 class Composite_data_element(Item):
-    def __init__(self, tag, name, function, data_elements, used_in_segments):
+    def __init__(self, tag, name, function, data_elements, used_in_segments, url):
         super().__init__(tag, name, function)
         self.data_elements = data_elements
         self.used_in_segments = used_in_segments
+        self.url = url
 
     def info(self):
         print('tag: {}'.format(self.tag))
         print('name: {}'.format(self.name))
         print('function: {}'.format(self.function))
+        print('url: {}'.format(self.url))
         print('data elements:')
         for data_element in self.data_elements:
             print('{}|{}|{}'.format(data_element[0], data_element[1], data_element[2]))
-        print('used in messages:')
+        print('used in segments:')
         for segment in self.used_in_segments:
             print('{}|'.format(segment), end='')
         print()
 
 class Data_element(Item):
-    def __init__(self, tag, name, function, format, code_list):
+    def __init__(self, tag, name, function, format, code_list, url):
     # def __init__(self, tag, name, function, format, code_list, used_in_batch_seg,
     #              used_in_batch_composite, used_in_interactive_seg, used_in_interactive_composite):
         super().__init__(tag, name, function)
         self.format = format
         self.code_list = code_list
+        self.url = url
         #self.used_in_batch_seg = used_in_batch_seg
         #self.used_in_batch_composite = used_in_batch_composite
         #self.used_in_interactive_seg = used_in_interactive_seg
@@ -72,6 +76,7 @@ class Data_element(Item):
         print('name: {}'.format(self.name))
         print('function: {}'.format(self.function))
         print('format: {}'.format(self.format))
+        print('url: {}'.format(self.url))
         print('codes:')
         for code in self.code_list:
             print('{}|{}|{}'.format(code.value, code.name, code.description))
@@ -88,10 +93,31 @@ class Data_element(Item):
 
 class CodeItem():
     def __init__(self, value, name, description):
+
         self.value = value
         self.name = name
         self.description = description
 
+class Dir():
+    def __init__(self, version, mode, url):
+        self.version = version
+        self.mode = mode
+        self.url = url
+
+class Segment_Dir(Dir):
+    def __init__(self, version, mode, url, segments):
+        super().__init__(version, mode, url)
+        self.segments = segments
+
+class Composite_Dir(Dir):
+    def __init__(self, version, mode, url, composite_elements):
+        super().__init__(version, mode, url)
+        self.segments = composite_elements
+
+class Element_Dir(Dir):
+    def __init__(self, version, mode, url, data_elements):
+        super().__init__(version, mode, url)
+        self.segments = data_elements
 
 def check_version_type(version, pat=re.compile(r"^[dD][0-9]{2}[abAB]$")):
     """check if syntactically valid EDIFACT version."""
@@ -164,9 +190,9 @@ def create_item(mode, version, tag, type):
         soup = BeautifulSoup(page.content, 'html.parser')
 
         if type == 'ed':
-            item = get_data_element_from_soup(soup, type)
+            item = get_data_element_from_soup(soup, type, URL)
         else:
-            item = get_item_from_soup(soup, type)
+            item = get_item_from_soup(soup, type, URL)
         return item
     else:
         return None
@@ -186,7 +212,7 @@ def create_item_list(mode, version, tags, type):
 
     return items
 
-def get_item_from_soup(soup, type):
+def get_item_from_soup(soup, type, url):
     """to scrap edifact directory pages (sd, cd) (ex. https://service.unece.org/trade/untdid/d19a/trsd/trsdbgm.htm)
        build and return a segment, composite or data element object."""
     #extract tag and name
@@ -252,12 +278,12 @@ def get_item_from_soup(soup, type):
                 used_in.append(segment_name)
 
     if type == 'sd':
-        item = Segment(tag, name, function, data_elements, used_in)
+        item = Segment(tag, name, function, data_elements, used_in, url)
     elif type == 'cd':
-        item = Composite_data_element(tag, name, function, data_elements, used_in)
+        item = Composite_data_element(tag, name, function, data_elements, used_in, url)
     return item
 
-def get_data_element_from_soup(soup, type):
+def get_data_element_from_soup(soup, type, url):
     """to scrap edifact directory pages (sd, cd, ed) (ex. https://service.unece.org/trade/untdid/d19a/trsd/trsdbgm.htm)
        build and return a segment, composite or data element object."""
     #extract tag and name
@@ -324,7 +350,7 @@ def get_data_element_from_soup(soup, type):
                     code_list.append(CodeItem(value, code_name, desc))
                 else:
                     code_list[-1].description += '. ' + ' '.join(code_block_str.split())
-    item = Data_element(tag, name, function, format, code_list)
+    item = Data_element(tag, name, function, format, code_list, url)
     return item
 
 def main():
@@ -368,19 +394,18 @@ def main():
     #     print('------------------------------')
 
     print('--------------------------')
-    # TEST creation of specific segment
-    item = create_item('tr', 'd01a', 'BGM', 'sd')
-    #item = create_item('tr', 'd01a', '3229', 'ed')
-    item.info()
-
-    print('--------------------------')
-    # TEST creation of composite data element
-    #item = create_item('tr', 'd01a', 'C002', 'cd')
+    # TEST creationurl of specific segment
+    #item = create_item('tr', 'd01a', 'BGM', 'sd')
     #item = create_item('tr', 'd01a', '3229', 'ed')
     #item.info()
 
+    print('--------------------------')
+    # TEST creation of composite data element
+    item = create_item('tr', 'd01a', 'C002', 'cd')
+    item.info()
+
     # TEST creation of specific data element
-    #item = create_item('tr', 'd01a', '1131', 'ed')
+    #item = create_item('tr', 'd01a', '5463', 'ed')
     #item = create_item('tr', 'd01a', '1001', 'ed')
     #item.info()
 
