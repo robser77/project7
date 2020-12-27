@@ -99,24 +99,27 @@ class CodeItem():
         self.description = description
 
 class Dir():
-    def __init__(self, version, mode, url):
+    def __init__(self, version, mode):
         self.version = version
         self.mode = mode
-        self.url = url
 
 class Segment_Dir(Dir):
-    def __init__(self, version, mode, url, segments):
-        super().__init__(version, mode, url)
+    def __init__(self, version, mode, segments):
+        super().__init__(version, mode)
         self.segments = segments
 
+    def toXml(self):
+        print('Test 123...')
+        
+
 class Composite_Dir(Dir):
-    def __init__(self, version, mode, url, composite_elements):
-        super().__init__(version, mode, url)
+    def __init__(self, version, mode, composite_elements):
+        super().__init__(version, mode)
         self.segments = composite_elements
 
 class Element_Dir(Dir):
-    def __init__(self, version, mode, url, data_elements):
-        super().__init__(version, mode, url)
+    def __init__(self, version, mode, data_elements):
+        super().__init__(version, mode)
         self.segments = data_elements
 
 def check_version_type(version, pat=re.compile(r"^[dD][0-9]{2}[abAB]$")):
@@ -372,6 +375,7 @@ def main():
     if verbose:
         print(verbose_text)
 
+    # 1) Segment Dir
     # Get all segments from segment directory and write them in list
     # tags = get_tags_from_website('tr', 'd01b', 'sd')
     # segments = create_item_list('tr', 'd01b', tags, 'sd')
@@ -379,6 +383,7 @@ def main():
     #     segment.info()
     #     print('------------------------------')
 
+    # 2) Comoposite Dir
     # Get all composite data elements from composite data element directory and write them in list
     # tags = get_tags_from_website('tr', 'd01b', 'cd')
     # composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
@@ -386,6 +391,7 @@ def main():
     #     composite_data_element.info()trsdbgm.htm.1
     #     print('------------------------------')
 
+    # 3) Data Element Dir
     # Get all data elements from element directory and write them in list
     # tags = get_tags_from_website('tr', 'd01b', 'ed')
     # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
@@ -393,23 +399,32 @@ def main():
     #     data_element.info()
     #     print('------------------------------')
 
-    print('--------------------------')
-    # TEST creationurl of specific segment
-    #item = create_item('tr', 'd01a', 'BGM', 'sd')
-    #item = create_item('tr', 'd01a', '3229', 'ed')
-    #item.info()
+    # TEST: Creation of specific segment
+    # item = create_item('tr', 'd01a', 'BGM', 'sd')
+    # item = create_item('tr', 'd01a', '3229', 'ed')
+    # item.info()
+    # print('--------------------------')
 
-    print('--------------------------')
-    # TEST creation of composite data element
-    item = create_item('tr', 'd01a', 'C002', 'cd')
-    item.info()
+    # TEST: Creation of composite data element
+    # item = create_item('tr', 'd01a', 'C002', 'cd')
+    # item.info()
+    # print('--------------------------')
 
-    # TEST creation of specific data element
-    #item = create_item('tr', 'd01a', '5463', 'ed')
-    #item = create_item('tr', 'd01a', '1001', 'ed')
-    #item.info()
+    # TEST: Creation of specific data element
+    # item = create_item('tr', 'd01a', '5463', 'ed')
+    # item = create_item('tr', 'd01a', '1001', 'ed')
+    # item.info()
 
+    # TEST: Segment Dir Object with limited tags
+    tags = ['BGM','DTM','NAD']
+    segments = create_item_list('tr', 'd01b', tags, 'sd')
+    MySegDir = Segment_Dir('tr', 'd01b', segments)
 
+    for segment in MySegDir.segments:
+        segment.info()
+        print('------------------------------')
+
+    MySegDir.toXml()
 
 if __name__ == "__main__":
     main()
