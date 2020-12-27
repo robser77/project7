@@ -159,12 +159,95 @@ class Segment_Dir(Dir):
 class Composite_Dir(Dir):
     def __init__(self, version, mode, composite_elements):
         super().__init__(version, mode)
-        self.segments = composite_elements
+        self.composite_elements = composite_elements
+
+    def toElementTree(self):
+        """returns an ElementTree Object of the composite directory."""
+        root = et.Element('composite_dir')
+        tree = et.ElementTree(root)
+
+        for i, composite_element in enumerate(self.composite_elements):
+            if verbose:
+                print('{} composite_data_element to XML Node...'.format(composite_element.tag))
+
+            composite_element_tag = et.Element('composite_data_element')
+            composite_element_tag.set('tag', composite_element.tag)
+            composite_element_tag.set('url', composite_element.url)
+            name = et.Element('name')
+            name.text = composite_element.name
+            composite_element_tag.append(name)
+            function = et.Element('function')
+            function.text = composite_element.function
+            composite_element_tag.append(function)
+            data_elements = et.Element('data_elements')
+            for data_element in composite_element.data_elements:
+                data_element_tag = et.Element('data_element')
+                data_element_tag.set('pos', str(data_element[0]))
+                data_element_tag.set('status', data_element[2])
+                data_element_tag.text = data_element[1]
+                data_elements.append(data_element_tag)
+            composite_element_tag.append(data_elements)
+            used_in = et.Element('used_in')
+            for segment in composite_element.used_in_segments:
+                segment_tag = et.Element('segment')
+                segment_tag.text = segment
+                used_in.append(segment_tag)
+            composite_element_tag.append(used_in)
+            root.append(composite_element_tag)
+        return tree
+
+    def toXML(self, filename):
+        tree = self.toElementTree()
+        with open(filename, 'wb') as f:
+            tree.write(f, encoding='utf-8')
 
 class Element_Dir(Dir):
     def __init__(self, version, mode, data_elements):
         super().__init__(version, mode)
-        self.segments = data_elements
+        self.data_elements = data_elements
+
+    def toElementTree(self):
+        """returns an ElementTree Object of the data element directory."""
+        root = et.Element('element_dir')
+        tree = et.ElementTree(root)
+
+        for i, data_element in enumerate(self.data_elements):
+            if verbose:
+                print('{} data_element to XML Node...'.format(data_element.tag))
+            data_element_tag = et.Element('data_element')
+            data_element_tag.set('tag', data_element.tag)
+            data_element_tag.set('url', data_element.url)
+            name = et.Element('name')
+            name.text = data_element.name
+            data_element_tag.append(name)
+            function = et.Element('function')
+            function.text = data_element.function
+            data_element_tag.append(function)
+            format = et.Element('format')
+            format.text = data_element.format
+            data_element_tag.append(format)
+            codes = et.Element('codes')
+            for code in data_element.code_list:
+                print('code: |{}|'.format(code.value))
+                code_tag = et.Element('code')
+                value = et.Element('value')
+                value.text = code.value
+                code_tag.append(value)
+                name = et.Element('name')
+                name.text = code.name
+                code_tag.append(name)
+                description = et.Element('description')
+                description.text = code.description
+                code_tag.append(description)
+                codes.append(code_tag)
+            data_element_tag.append(codes)
+            root.append(data_element_tag)
+        return tree
+
+    def toXML(self, filename):
+        tree = self.toElementTree()
+        with open(filename, 'wb') as f:
+            tree.write(f, encoding='utf-8')
 
 def check_version_type(version, pat=re.compile(r"^[dD][0-9]{2}[abAB]$")):
     """check if syntactically valid EDIFACT version."""
@@ -279,12 +362,22 @@ def get_item_from_soup(soup, type, url):
 
     #extract function/description
     function_tmp_1 = tag_name.next_sibling
-    function_tmp_2 = ''.join(i for i in function_tmp_1 if not i.isdigit()).strip()
+    # TODO: check in cd if this creates valid output.
+    #function_tmp_2 = ''.join(i for i in function_tmp_1 if not i.isdigit()).strip()
+    function_tmp_2 = ''.join(i for i in function_tmp_1).strip()
+    if function_tmp_2[-3:] == '010':
+        function_tmp_3 = function_tmp_2[:-3]
+    elif function_tmp_2[-5:] == '010 X':
+        function_tmp_3 = function_tmp_2[:-5]
+    else:
+        function_tmp_3 = function_tmp_2
+    #print('function1: |{}|'.format(function_tmp_1))
+    #print('function2: |{}|'.format(function_tmp_2))
 
     if type == 'sd':
-        function = (' '.join(function_tmp_2.split())).replace('Function: ','')
+        function = (' '.join(function_tmp_3.split())).replace('Function: ','')
     if type == 'cd':
-        function = (' '.join(function_tmp_2.split())).replace('Desc: ','')
+        function = (' '.join(function_tmp_3.split())).replace('Desc: ','')
 
     #extract data-element position and data-element code to build dictionary
     data_elements = []
@@ -386,7 +479,8 @@ def get_data_element_from_soup(soup, type, url):
                     # example: 5463
                     if (code_value_name_tmp.split('   ')[0].strip() == 'X' and \
                         len(code_value_name_tmp.split('   ')) == 3) or \
-                        code_value_name_tmp.split('   ')[0].strip() == '#':
+                        code_value_name_tmp.split('   ')[0].strip() == '#' or \
+                        code_value_name_tmp.split('   ')[0].strip() == '+':
                         value = code_value_name_tmp.split('   ')[1].strip()
                         code_name = code_value_name_tmp.split('   ')[2].lstrip()
                     else:
@@ -429,22 +523,24 @@ def main():
 
     # 2) Comoposite Dir
     # Get all composite data elements from composite data element directory and write them in list
-    # tags = get_tags_from_website('tr', 'd01b', 'cd')
+    # tags = get_tags_from_webssegmentsite('tr', 'd01b', 'cd')
     # composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
     # for composite_data_element in composite_data_elements:
-    #     composite_data_element.info()trsdbgm.htm.1
-    #     print('------------------------------')tags = get_tags_from_website('tr', 'd01b', 'sd')
+    #     composite_data_element.info()
+    #     print('------------------------------')
 
     # 3) Data Element Dir
     # Get all data elements from element directory and write them in list
     # tags = get_tags_from_website('tr', 'd01b', 'ed')
+    # tags = ['1131','3055','7364']
+    # tags = ['9616','5463']
     # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
     # for data_element in data_elements:
     #     data_element.info()
     #     print('------------------------------')
 
     # TEST: Creation of specific segment
-    # item = create_item('tr', 'd01a', 'ARR', 'sd')
+    # item = create_item('tr', 'd01a', 'NAD', 'sd')
     # item = create_item('tr', 'd01a', '3229', 'ed')
     # item.info()
     # print('--------------------------')
@@ -461,10 +557,23 @@ def main():
 
     # TEST: Segment Dir Object with limited tags
     # tags = ['BGM','DTM','NAD']
-    tags = get_tags_from_website('tr', 'd01b', 'sd')
-    segments = create_item_list('tr', 'd01b', tags, 'sd')
-    MySegDir = Segment_Dir('tr', 'd01b', segments)
-    MySegDir.toXML('myXML.xml')
+    # tags = get_tags_from_website('tr', 'd01b', 'sd')
+    # segments = create_item_list('tr', 'd01b', tags, 'sd')
+    # MySegDir = Segment_Dir('tr', 'd01b', segments)
+    # MySegDir.toXML('myXML.xml')
+
+    # tags = get_tags_from_website('tr', 'd01b', 'cd')
+    # TEST: Segment Dir Object with limited tags
+    # composite_elements = create_item_list('tr', 'd01b', tags, 'cd')
+    # MyComDir = Composite_Dir('tr', 'd01b', composite_elements)
+    # MyComDir.toXML('myComDirXML.xml')
+
+    # TEST: Data Element Dir Object with limited tags
+    # tags = ['9616','5463']
+    tags = get_tags_from_website('tr', 'd01b', 'ed')
+    data_elements = create_item_list('tr', 'd01b', tags, 'ed')
+    MyElemDir = Element_Dir('tr', 'd01b', data_elements)
+    MyElemDir.toXML('myElemDirXML.xml')
 
 if __name__ == "__main__":
     main()
