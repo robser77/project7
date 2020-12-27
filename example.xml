@@ -1,0 +1,62 @@
+<edifact_directories>
+	<edifact_directory version="d01a" mode="tr">
+		<segment_dir>
+			<segment tag="BGM" url="https://service.unece.org/trade/untdid/d01a/trsd/trsdbgm.htm">
+				<name>BEGINNING OF MESSAGE</name>
+				<function>To indicate the type and function of a message and to transmit the identifying number.</function>
+				<data_elements>
+					<pos_010 status="C" type="composite">C002</pos_010>
+					<pos_020 status="C" type="composite">C106</pos_020>
+					<pos_030 status="C" type="simple">1225</pos_030>
+					<pos_040 status="C" type="simple">4343</pos_040>
+				</data_elements>
+				<used_in>
+					<message>APERAK</message>
+					<message>AUTHOR</message>
+					<message>BALANC</message>
+				</used_in>
+			</segment>
+		</segment_dir>
+		<composite_dir>
+			<composite_data_element tag="C002" url="https://service.unece.org/trade/untdid/d01a/trcd/trcdc002.htm">
+				<name>DOCUMENT/MESSAGE NAME</name>
+				<function>Identification of a type of document/message by code or name. Code preferred.</function>
+				<data_elements>
+					<pos_010 status="C">1001</pos_010>
+					<pos_020 status="C">1131</pos_020>
+					<pos_030 status="C">3055</pos_030>
+					<pos_040 status="C">1000</pos_040>
+				</data_elements>
+				<used_in>
+					<segment>BGM</segment>
+					<segment>DMS</segment>
+					<segment>DOC</segment>
+				</used_in>
+			</composite_data_element>
+		</composite_dir>
+		<element_dir>
+			<data_element tag="5463" url="https://service.unece.org/trade/untdid/d01a/tred/tred5463.htm">
+				<name>Allowance or charge code qualifier</name>
+				<function>Code qualifying an allowance or charge.</function>
+				<format>an..3</format>
+				<codes>
+					<code>
+						<value>A</value>
+						<name>Allowance</name>
+						<description>Code specifying an allowance</description>
+					</code>
+					<code>
+						<value>B</value>
+						<name>Total other</name>
+						<description>The total for items other than those primarily reported upon in the message</description>
+					</code>
+					<code>
+						<value>C</value>
+						<name>Charge</name>
+						<description>Code specifying a charge</description>
+					</code>
+				</codes>
+			</data_element>
+		</element_dir>
+	</edifact_directory>
+</edifact_directories>
