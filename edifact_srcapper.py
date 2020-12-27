@@ -3,6 +3,7 @@ import re
 import requests
 import time
 from bs4 import BeautifulSoup
+from xml.etree import ElementTree as et
 
 #TODO start
 # Adding Data Element Cross Reference?
@@ -108,9 +109,52 @@ class Segment_Dir(Dir):
         super().__init__(version, mode)
         self.segments = segments
 
-    def toXml(self):
-        print('Test 123...')
-        
+    def toElementTree(self):
+        """returns an ElementTree Object of the segment directory."""
+        root = et.Element('segment_dir')
+        tree = et.ElementTree(root)
+
+        for i, segment in enumerate(self.segments):
+
+            if verbose:
+                print('{} segment to XML Node...'.format(segment.tag))
+
+            segment_tag = et.Element('segment')
+            segment_tag.set('tag', segment.tag)
+            segment_tag.set('url', segment.url)
+            name = et.Element('name')
+            name.text = segment.name
+            segment_tag.append(name)
+            function = et.Element('function')
+            function.text = segment.function
+            segment_tag.append(function)
+            data_elements = et.Element('data_elements')
+            for data_element in segment.data_elements:
+                data_element_tag = et.Element('data_element')
+                data_element_tag.set('pos', str(data_element[0]))
+                #pos = et.Element('pos_' + str(data_element[0]))
+                data_element_tag.set('status', data_element[2])
+                if data_element[1].startswith('C'):
+                    type = 'composite'
+                else:
+                    type = 'simple'
+                data_element_tag.set('type', type)
+                data_element_tag.text = data_element[1]
+                data_elements.append(data_element_tag)
+            segment_tag.append(data_elements)
+            used_in = et.Element('used_in')
+            for message in segment.used_in_messages:
+                message_tag = et.Element('message')
+                message_tag.text = message
+                used_in.append(message_tag)
+            segment_tag.append(used_in)
+            root.append(segment_tag)
+        return tree
+
+    def toXML(self, filename):
+        tree = self.toElementTree()
+        with open(filename, 'wb') as f:
+            tree.write(f, encoding='utf-8')
 
 class Composite_Dir(Dir):
     def __init__(self, version, mode, composite_elements):
@@ -257,7 +301,7 @@ def get_item_from_soup(soup, type, url):
                 # find status of data element in composite directory
                 if type == 'cd' or type == 'sd':
                     if isinstance(a_tag.next_sibling, str):
-                        pattern = re.compile(r' [A-Z]  ')
+                        pattern = re.compile(r' [A-Z] ')
                         resultTmp = pattern.search(a_tag.next_sibling)
                         if resultTmp is not None:
                             status = resultTmp.group().strip()
@@ -400,7 +444,7 @@ def main():
     #     print('------------------------------')
 
     # TEST: Creation of specific segment
-    # item = create_item('tr', 'd01a', 'BGM', 'sd')
+    # item = create_item('tr', 'd01a', 'ARR', 'sd')
     # item = create_item('tr', 'd01a', '3229', 'ed')
     # item.info()
     # print('--------------------------')
@@ -416,15 +460,11 @@ def main():
     # item.info()
 
     # TEST: Segment Dir Object with limited tags
-    tags = ['BGM','DTM','NAD']
+    # tags = ['BGM','DTM','NAD']
+    tags = get_tags_from_website('tr', 'd01b', 'sd')
     segments = create_item_list('tr', 'd01b', tags, 'sd')
     MySegDir = Segment_Dir('tr', 'd01b', segments)
-
-    for segment in MySegDir.segments:
-        segment.info()
-        print('------------------------------')
-
-    MySegDir.toXml()
+    MySegDir.toXML('myXML.xml')
 
 if __name__ == "__main__":
     main()
