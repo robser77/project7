@@ -433,7 +433,7 @@ def main():
     # composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
     # for composite_data_element in composite_data_elements:
     #     composite_data_element.info()trsdbgm.htm.1
-    #     print('------------------------------')
+    #     print('------------------------------')tags = get_tags_from_website('tr', 'd01b', 'sd')
 
     # 3) Data Element Dir
     # Get all data elements from element directory and write them in list
