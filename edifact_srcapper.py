@@ -6,8 +6,10 @@ from bs4 import BeautifulSoup
 from xml.etree import ElementTree as et
 
 #TODO start
-# Adding Data Element Cross Reference?
-# Add Note Attribute to Data Element? (only appears in some data elments ex:3229)
+# Add EDIFACT Dir class and create complete xml
+# Quality Checks
+# Check if toXml methods can be unified
+#
 #TODO end
 
 base_URL = 'https://service.unece.org/trade/untdid/'
@@ -228,7 +230,6 @@ class Element_Dir(Dir):
             data_element_tag.append(format)
             codes = et.Element('codes')
             for code in data_element.code_list:
-                print('code: |{}|'.format(code.value))
                 code_tag = et.Element('code')
                 value = et.Element('value')
                 value.text = code.value
@@ -246,6 +247,48 @@ class Element_Dir(Dir):
 
     def toXML(self, filename):
         tree = self.toElementTree()
+        with open(filename, 'wb') as f:
+            tree.write(f, encoding='utf-8')
+
+class Edifact_Dir(Dir):
+    def __init__(self, version, mode):
+        super().__init__(version, mode)
+
+    def create_segment_directory_tree(self):
+        """Returns an ElementTree Object of the segment directory."""
+        tags = get_tags_from_website(self.version, self.mode, 'sd')
+        segments = create_item_list(self.version, self.mode, tags, 'sd')
+        return Segment_Dir(self.version, self.mode, segments).toElementTree()
+
+    def create_composite_directory_tree(self):
+        """Returns an ElementTree Object of the composite directory."""
+        tags = get_tags_from_website(self.version, self.mode, 'cd')
+        composite_elements = create_item_list(self.version, self.mode, tags, 'cd')
+        return Composite_Dir(self.version, self.mode, composite_elements).toElementTree()
+
+    def create_data_element_directory_tree(self):
+        """Returns an ElementTree Object of the data element directory."""
+        tags = get_tags_from_website(self.version, self.mode, 'ed')
+        data_elements = create_item_list(self.version, self.mode, tags, 'ed')
+        return Element_Dir(self.version, self.mode, data_elements).toElementTree()
+
+    def create(self):
+        """returns an ElementTree Object of the edifact directory."""
+        segment_dir_tree = self.create_segment_directory_tree()
+        composite_dir_tree = self.create_composite_directory_tree()
+        data_element_dir_tree = self.create_data_element_directory_tree()
+
+        root = et.Element('edifact_directory')
+        tree = et.ElementTree(root)
+        root.set('version', self.version)
+        root.set('mode', self.mode)
+        root.append(segment_dir_tree.getroot())
+        root.append(composite_dir_tree.getroot())
+        root.append(data_element_dir_tree.getroot())
+        return tree
+
+    def toXML(self, filename, tree):
+        """writes a tree to an XML file."""
         with open(filename, 'wb') as f:
             tree.write(f, encoding='utf-8')
 
@@ -569,11 +612,25 @@ def main():
     # MyComDir.toXML('myComDirXML.xml')
 
     # TEST: Data Element Dir Object with limited tags
-    # tags = ['9616','5463']
-    tags = get_tags_from_website('tr', 'd01b', 'ed')
-    data_elements = create_item_list('tr', 'd01b', tags, 'ed')
-    MyElemDir = Element_Dir('tr', 'd01b', data_elements)
-    MyElemDir.toXML('myElemDirXML.xml')
+    # tags = ['9616','546tree = et.ElementTree(root)3']
+    # tags = get_tags_from_website('tr', 'd01b', 'ed')
+    # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
+    # MyElemDir = Element_Dir('tr', 'd01b', data_elements)
+    # MyElemDir.toXML('myElemDirXML.xml')
+
+    # Edifact_Dir - TESTs
+    my_edifact_dir = Edifact_Dir('tr','d01b')
+    # seg_dir = my_edifact_dir.create_segment_directory_tree()
+    # my_edifact_dir.toXML('seg_dir.xml', seg_dir)
+
+    # comp_dir = my_edifact_dir.create_composite_directory_tree()
+    # my_edifact_dir.toXML('comp_dir.xml', comp_dir)
+
+    # elem_dir = my_edifact_dir.create_data_element_directory_tree()
+    # my_edifact_dir.toXML('elem_dir.xml', elem_dir)
+
+    edifact_dir = my_edifact_dir.create()
+    my_edifact_dir.toXML('edifact_dir.xml', edifact_dir)
 
 if __name__ == "__main__":
     main()
