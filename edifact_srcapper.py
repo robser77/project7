@@ -6,8 +6,8 @@ from bs4 import BeautifulSoup
 from xml.etree import ElementTree as et
 
 #TODO start
-# Add EDIFACT Dir class and create complete xml
 # Quality Checks
+# Create light-weight XML by reducing tag names to minimum
 # Check if toXml methods can be unified
 #
 #TODO end
@@ -575,7 +575,7 @@ def main():
     # 3) Data Element Dir
     # Get all data elements from element directory and write them in list
     # tags = get_tags_from_website('tr', 'd01b', 'ed')
-    # tags = ['1131','3055','7364']
+    # tags = ['1131','3055','7364']print('link: |{}|'.format(link))
     # tags = ['9616','5463']
     # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
     # for data_element in data_elements:
@@ -619,18 +619,105 @@ def main():
     # MyElemDir.toXML('myElemDirXML.xml')
 
     # Edifact_Dir - TESTs
-    my_edifact_dir = Edifact_Dir('tr','d01b')
+    # my_edifact_dir = Edifact_Dir('tr','d01b')
+
     # seg_dir = my_edifact_dir.create_segment_directory_tree()
     # my_edifact_dir.toXML('seg_dir.xml', seg_dir)
-
     # comp_dir = my_edifact_dir.create_composite_directory_tree()
     # my_edifact_dir.toXML('comp_dir.xml', comp_dir)
-
     # elem_dir = my_edifact_dir.create_data_element_directory_tree()
     # my_edifact_dir.toXML('elem_dir.xml', elem_dir)
+    # edifact_dir = my_edifact_dir.create()
+    # my_edifact_dir.toXML('edifact_dir.xml', edifact_dir)
 
-    edifact_dir = my_edifact_dir.create()
-    my_edifact_dir.toXML('edifact_dir.xml', edifact_dir)
+    URL = "https://service.unece.org/trade/untdid/d01b/trmd/orders_c.htm"
+    page = get_page_from_URL(URL)
+
+    if page is not None:
+        soup = BeautifulSoup(page.content, 'html.parser')
+        a_tags = soup.find_all("a")
+
+        root = et.Element('orders')
+        tree = et.ElementTree(root)
+        curr_node_stack = []
+        curr_node_stack.append(root)
+        curr_parent_node = root
+
+        for a_tag in a_tags:
+            if (re.match(r'[A-Z]{3}', a_tag.text) and \
+                (' M ' in a_tag.next_sibling or \
+                 ' C ' in a_tag.next_sibling)) or \
+                (re.match(r'[0-9]{4}', a_tag.text) and
+                 '-- Segment group ' in a_tag.next_sibling):
+                # Segments which do not pertain to a group
+                # just add them to root
+                if '|' not in a_tag.next_sibling and \
+                   '+' not in a_tag.next_sibling and \
+                    not(re.match(r'[0-9]{4}', a_tag.text)):
+                    print('---|{}|'.format(a_tag.text))
+
+                    node = et.Element(a_tag.text)
+                    curr_parent_node = root
+                    curr_depth = 0
+                    curr_parent_node.append(node)
+
+                elif 'Segment group' in a_tag.next_sibling:
+                    pattern = re.compile('Segment group [0-9]{1,3}')
+                    seg_group_tmp = pattern.search(a_tag.next_sibling)
+                    seg_group = seg_group_tmp.group().replace(' ', '_').lower()
+                    filler = '---' * (a_tag.next_sibling.count('|') + 1)
+                    print('-{}|{}|'.format(filler, seg_group))
+
+                    node = et.Element(seg_group)
+                    depth = a_tag.next_sibling.count('|')
+
+                    print('seg group: |{}|'.format(seg_group))
+                    print('depth: |{}|'.format(depth))
+                    print('length: |{}|'.format(len(curr_node_stack)))
+
+                    # depth equals zero
+                    if depth == 0:
+                        print('action: create child of root')
+                        curr_parent_node = root
+                        curr_parent_node.append(node)
+                        if len(curr_node_stack) > 1:
+                            curr_node_stack = curr_node_stack[:1]
+                        print('length_after: |{}|'.format(len(curr_node_stack)))
+
+                        curr_node_stack.append(node)
+
+                    elif depth > 0:
+                        if depth == len(curr_node_stack) - 1:
+                            print('create child')
+                            curr_parent_node = curr_node_stack[-1]
+                            curr_parent_node.append(node)
+                            curr_node_stack.append(node)
+                        elif depth < len(curr_node_stack) - 1:
+                            print('move up')
+
+                            diff = len(curr_node_stack) - depth - 1
+                            print('diff: |{}|'.format(diff))
+
+                            curr_node_stack = curr_node_stack[:-diff]
+                            curr_parent_node = curr_node_stack[-1]
+                            curr_parent_node.append(node)
+                            curr_node_stack.append(node)
+
+
+                # elif (re.match(r'[A-Z]{3}', a_tag.text)):
+                #
+                #     next_sibling = a_tag.next_sibling.split('\n')[0]
+                #     counter = next_sibling.count('|') + next_sibling.count('+')
+                #     filler = '---' * (counter)
+                #     print('---{}|{}|'.format(filler, a_tag.text))
+
+                    # node = et.Element(a_tag.text)
+                    # curr_append_to_node = curr_append_to_node_stack[counter]
+                    # curr_append_to_node.append(node)
+
+
+        with open('bla.xml', 'wb') as f:
+            tree.write(f, encoding='utf-8')
 
 if __name__ == "__main__":
     main()
