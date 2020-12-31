@@ -655,7 +655,6 @@ def main():
                    '+' not in a_tag.next_sibling and \
                     not(re.match(r'[0-9]{4}', a_tag.text)):
                     print('---|{}|'.format(a_tag.text))
-
                     node = et.Element(a_tag.text)
                     curr_parent_node = root
                     curr_depth = 0
@@ -667,54 +666,35 @@ def main():
                     seg_group = seg_group_tmp.group().replace(' ', '_').lower()
                     filler = '---' * (a_tag.next_sibling.count('|') + 1)
                     print('-{}|{}|'.format(filler, seg_group))
-
                     node = et.Element(seg_group)
                     depth = a_tag.next_sibling.count('|')
 
-                    print('seg group: |{}|'.format(seg_group))
-                    print('depth: |{}|'.format(depth))
-                    print('length: |{}|'.format(len(curr_node_stack)))
-
-                    # depth equals zero
                     if depth == 0:
-                        print('action: create child of root')
                         curr_parent_node = root
                         curr_parent_node.append(node)
                         if len(curr_node_stack) > 1:
                             curr_node_stack = curr_node_stack[:1]
-                        print('length_after: |{}|'.format(len(curr_node_stack)))
-
                         curr_node_stack.append(node)
-
                     elif depth > 0:
                         if depth == len(curr_node_stack) - 1:
-                            print('create child')
                             curr_parent_node = curr_node_stack[-1]
                             curr_parent_node.append(node)
                             curr_node_stack.append(node)
                         elif depth < len(curr_node_stack) - 1:
-                            print('move up')
-
-                            diff = len(curr_node_stack) - depth - 1
-                            print('diff: |{}|'.format(diff))
-
+                            diff = (len(curr_node_stack) - 1) - depth
                             curr_node_stack = curr_node_stack[:-diff]
                             curr_parent_node = curr_node_stack[-1]
                             curr_parent_node.append(node)
                             curr_node_stack.append(node)
 
-
-                # elif (re.match(r'[A-Z]{3}', a_tag.text)):
-                #
-                #     next_sibling = a_tag.next_sibling.split('\n')[0]
-                #     counter = next_sibling.count('|') + next_sibling.count('+')
-                #     filler = '---' * (counter)
-                #     print('---{}|{}|'.format(filler, a_tag.text))
-
-                    # node = et.Element(a_tag.text)
-                    # curr_append_to_node = curr_append_to_node_stack[counter]
-                    # curr_append_to_node.append(node)
-
+                elif (re.match(r'[A-Z]{3}', a_tag.text)):
+                    next_sibling = a_tag.next_sibling.split('\n')[0]
+                    counter = next_sibling.count('|') + next_sibling.count('+')
+                    filler = '---' * (counter)
+                    print('---{}|{}|'.format(filler, a_tag.text))
+                    node = et.Element(a_tag.text)
+                    curr_parent_node = curr_node_stack[-1]
+                    curr_parent_node.append(node)
 
         with open('bla.xml', 'wb') as f:
             tree.write(f, encoding='utf-8')
