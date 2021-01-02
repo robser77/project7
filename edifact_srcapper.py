@@ -537,6 +537,118 @@ def get_data_element_from_soup(soup, type, url):
     item = Data_element(tag, name, function, format, code_list, url)
     return item
 
+def get_message_types_from_website(mode, version, type):
+    """ get all message names from website and return a list including message names. """
+    pass
+
+def create_message_element_tree_from_soup(soup, message_type, url):
+    """ create message structure from soup and return element tree. """
+    a_tags = soup.find_all("a")
+    root = et.Element(message_type)
+    tree = et.ElementTree(root)
+    curr_node_stack = []
+    curr_node_stack.append(root)
+    curr_parent_node = root
+    if verbose:
+        print('Message Type: {}'.format(message_type.upper()))
+    for a_tag in a_tags:
+        status = 'unknown'
+        recurrence = 'unknown'
+        if (re.match(r'[A-Z]{3}', a_tag.text) and \
+            (' M ' in a_tag.next_sibling or \
+             ' C ' in a_tag.next_sibling)) or \
+            (re.match(r'[0-9]{4}', a_tag.text) and
+             '-- Segment group ' in a_tag.next_sibling):
+            # Segments which do not pertain to a group
+            # just add them to root
+            if '|' not in a_tag.next_sibling and \
+               '+' not in a_tag.next_sibling and \
+                not(re.match(r'[0-9]{4}', a_tag.text)):
+                if verbose:
+                    print('---|{}|'.format(a_tag.text))
+                node = et.Element(a_tag.text)
+                # add status attribute
+                if ' M ' in a_tag.next_sibling:
+                    status = 'M'
+                elif ' C ' in a_tag.next_sibling:
+                    status = 'C'
+                node.set('status', status)
+                # add recurrence attribute
+                pattern = re.compile(' [0-9]{1,6} ')
+                recurrence_tmp = pattern.search(a_tag.next_sibling)
+                recurrence = recurrence_tmp.group().strip()
+                node.set('recurrence', recurrence)
+                # set actual parent node
+                curr_parent_node = root
+                curr_parent_node.append(node)
+            elif 'Segment group' in a_tag.next_sibling:
+                pattern = re.compile('Segment group [0-9]{1,3}')
+                seg_group_tmp = pattern.search(a_tag.next_sibling)
+                seg_group = seg_group_tmp.group().replace(' ', '_').lower()
+                filler = '---' * (a_tag.next_sibling.count('|') + 1)
+                if verbose:
+                    print('-{}|{}|'.format(filler, seg_group))
+                node = et.Element(seg_group)
+                #add status attribute
+                if ' M ' in a_tag.next_sibling:
+                    status = 'M'
+                elif ' C ' in a_tag.next_sibling:
+                    status = 'C'
+                node.set('status', status)
+                # add recurrence attribute
+                pattern = re.compile(' [0-9]{1,6}--')
+                recurrence_tmp = pattern.search(a_tag.next_sibling)
+                recurrence = recurrence_tmp.group().replace('--','').strip()
+                node.set('recurrence', recurrence)
+
+                depth = a_tag.next_sibling.count('|')
+
+                if depth == 0:
+                    curr_parent_node = root
+                    curr_parent_node.append(node)
+                    if len(curr_node_stack) > 1:
+                        curr_node_stack = curr_node_stack[:1]
+                    curr_node_stack.append(node)
+                elif depth > 0:
+                    if depth == len(curr_node_stack) - 1:
+                        curr_parent_node = curr_node_stack[-1]
+                        curr_parent_node.append(node)
+                        curr_node_stack.append(node)
+                    elif depth < len(curr_node_stack) - 1:
+                        diff = (len(curr_node_stack) - 1) - depth
+                        curr_node_stack = curr_node_stack[:-diff]
+                        curr_parent_node = curr_node_stack[-1]
+                        curr_parent_node.append(node)
+                        curr_node_stack.append(node)
+
+            elif (re.match(r'[A-Z]{3}', a_tag.text)):
+                next_sibling = a_tag.next_sibling.split('\n')[0]
+                counter = next_sibling.count('|') + next_sibling.count('+')
+                filler = '---' * (counter)
+                if verbose:
+                    print('---{}|{}|'.format(filler, a_tag.text))
+                node = et.Element(a_tag.text)
+                #add status attribute
+                if ' M ' in a_tag.next_sibling:
+                    status = 'M'
+                elif ' C ' in a_tag.next_sibling:
+                    status = 'C'
+                node.set('status', status)
+                # add recurrence attribute
+                if '--' in a_tag.next_sibling:
+                    pattern = re.compile(' [0-9]{1,6}--')
+                else:
+                    pattern = re.compile(' [0-9]{1,6} ')
+                recurrence_tmp = pattern.search(a_tag.next_sibling)
+                if '--' in a_tag.next_sibling:
+                    recurrence = recurrence_tmp.group().replace('--' ,'').strip()
+                else:
+                    recurrence = recurrence_tmp.group().strip()
+                node.set('recurrence', recurrence)
+                curr_parent_node = curr_node_stack[-1]
+                curr_parent_node.append(node)
+    return tree
+
 def main():
     global verbose
     """used when executed from command line"""
@@ -635,68 +747,8 @@ def main():
 
     if page is not None:
         soup = BeautifulSoup(page.content, 'html.parser')
-        a_tags = soup.find_all("a")
-
-        root = et.Element('orders')
-        tree = et.ElementTree(root)
-        curr_node_stack = []
-        curr_node_stack.append(root)
-        curr_parent_node = root
-
-        for a_tag in a_tags:
-            if (re.match(r'[A-Z]{3}', a_tag.text) and \
-                (' M ' in a_tag.next_sibling or \
-                 ' C ' in a_tag.next_sibling)) or \
-                (re.match(r'[0-9]{4}', a_tag.text) and
-                 '-- Segment group ' in a_tag.next_sibling):
-                # Segments which do not pertain to a group
-                # just add them to root
-                if '|' not in a_tag.next_sibling and \
-                   '+' not in a_tag.next_sibling and \
-                    not(re.match(r'[0-9]{4}', a_tag.text)):
-                    print('---|{}|'.format(a_tag.text))
-                    node = et.Element(a_tag.text)
-                    curr_parent_node = root
-                    curr_depth = 0
-                    curr_parent_node.append(node)
-
-                elif 'Segment group' in a_tag.next_sibling:
-                    pattern = re.compile('Segment group [0-9]{1,3}')
-                    seg_group_tmp = pattern.search(a_tag.next_sibling)
-                    seg_group = seg_group_tmp.group().replace(' ', '_').lower()
-                    filler = '---' * (a_tag.next_sibling.count('|') + 1)
-                    print('-{}|{}|'.format(filler, seg_group))
-                    node = et.Element(seg_group)
-                    depth = a_tag.next_sibling.count('|')
-
-                    if depth == 0:
-                        curr_parent_node = root
-                        curr_parent_node.append(node)
-                        if len(curr_node_stack) > 1:
-                            curr_node_stack = curr_node_stack[:1]
-                        curr_node_stack.append(node)
-                    elif depth > 0:
-                        if depth == len(curr_node_stack) - 1:
-                            curr_parent_node = curr_node_stack[-1]
-                            curr_parent_node.append(node)
-                            curr_node_stack.append(node)
-                        elif depth < len(curr_node_stack) - 1:
-                            diff = (len(curr_node_stack) - 1) - depth
-                            curr_node_stack = curr_node_stack[:-diff]
-                            curr_parent_node = curr_node_stack[-1]
-                            curr_parent_node.append(node)
-                            curr_node_stack.append(node)
-
-                elif (re.match(r'[A-Z]{3}', a_tag.text)):
-                    next_sibling = a_tag.next_sibling.split('\n')[0]
-                    counter = next_sibling.count('|') + next_sibling.count('+')
-                    filler = '---' * (counter)
-                    print('---{}|{}|'.format(filler, a_tag.text))
-                    node = et.Element(a_tag.text)
-                    curr_parent_node = curr_node_stack[-1]
-                    curr_parent_node.append(node)
-
-        with open('bla.xml', 'wb') as f:
+        tree = create_message_element_tree_from_soup(soup, 'orders', URL)
+        with open('test_order_structure.xml', 'wb') as f:
             tree.write(f, encoding='utf-8')
 
 if __name__ == "__main__":
