@@ -4,6 +4,7 @@ import requests
 import time
 from bs4 import BeautifulSoup
 from xml.etree import ElementTree as et
+from datetime import datetime
 
 #TODO start
 # Quality Checks
@@ -29,17 +30,18 @@ class Segment(Item):
         self.used_in_messages = used_in_messages
         self.url = url
     def info(self):
-        print('tag: {}'.format(self.tag))
-        print('name: {}'.format(self.name))
-        print('function: {}'.format(self.function))
-        print('url: {}'.format(self.url))
-        print('data elements:')
+        my_info = 'tag: {}\n'.format(self.tag)
+        my_info += 'name: {}\n'.format(self.name)
+        my_info += 'function: {}\n'.format(self.function)
+        my_info += 'url: {}\n'.format(self.url)
+        my_info += 'data elements: \n'
         for data_element in self.data_elements:
-            print('{}|{}|{}'.format(data_element[0], data_element[1], data_element[2]))
-        print('used in messages:')
+            my_info += '{}|{}|{}\n'.format(data_element[0], data_element[1], data_element[2])
+        my_info += 'used in messages:'
         for message in self.used_in_messages:
-            print('{}|'.format(message), end='')
-        print()
+            my_info += '{}|'.format(message)
+        my_info += '\n'
+        return my_info
 
 class Composite_data_element(Item):
     def __init__(self, tag, name, function, data_elements, used_in_segments, url):
@@ -49,50 +51,36 @@ class Composite_data_element(Item):
         self.url = url
 
     def info(self):
-        print('tag: {}'.format(self.tag))
-        print('name: {}'.format(self.name))
-        print('function: {}'.format(self.function))
-        print('url: {}'.format(self.url))
-        print('data elements:')
+        my_info = 'tag: {}\n'.format(self.tag)
+        my_info += 'name: {}\n'.format(self.name)
+        my_info += 'function: {}\n'.format(self.function)
+        my_info += 'url: {}\n'.format(self.url)
+        my_info += 'data elements: \n'
         for data_element in self.data_elements:
-            print('{}|{}|{}'.format(data_element[0], data_element[1], data_element[2]))
-        print('used in segments:')
-        for segment in self.used_in_segments:
-            print('{}|'.format(segment), end='')
-        print()
+            my_info += '{}|{}|{}\n'.format(data_element[0], data_element[1], data_element[2])
+        my_info += 'used in segments:'
+        for message in self.used_in_segments:
+            my_info += '{}|'.format(message)
+        my_info += '\n'
+        return my_info
 
 class Data_element(Item):
     def __init__(self, tag, name, function, format, code_list, url):
-    # def __init__(self, tag, name, function, format, code_list, used_in_batch_seg,
-    #              used_in_batch_composite, used_in_interactive_seg, used_in_interactive_composite):
         super().__init__(tag, name, function)
         self.format = format
         self.code_list = code_list
         self.url = url
-        #self.used_in_batch_seg = used_in_batch_seg
-        #self.used_in_batch_composite = used_in_batch_composite
-        #self.used_in_interactive_seg = used_in_interactive_seg
-        #self.used_in_interactive_composite = used_in_interactive_composite
 
     def info(self):
-        print('tag: {}'.format(self.tag))
-        print('name: {}'.format(self.name))
-        print('function: {}'.format(self.function))
-        print('format: {}'.format(self.format))
-        print('url: {}'.format(self.url))
-        print('codes:')
+        my_info = 'tag: {}\n'.format(self.tag)
+        my_info += 'name: {}\n'.format(self.name)
+        my_info += 'function: {}\n'.format(self.function)
+        my_info += 'fornat: {}\n'.format(self.format)
+        my_info += 'url: {}\n'.format(self.url)
+        my_info += 'codes: \n'
         for code in self.code_list:
-            print('{}|{}|{}'.format(code.value, code.name, code.description))
-        # print('used in messages:')
-        # for segment in self.used_in_batch_seg:
-        #     print('{}|'.format(segment), end='')
-        # for composite in self.used_in_batch_composite:
-        #     print('{}|'.format(composite), end='')
-        # for segment in self.used_in_interactive_seg:
-        #     print('{}|'.format(segment), end='')
-        # for composite in self.used_in_interactive_composite:
-        #     print('{}|'.format(composite), end='')
-        print()
+            my_info += '{}|{}|{}\n'.format(code.value, code.name, code.description)
+        return my_info
 
 class CodeItem():
     def __init__(self, value, name, description):
@@ -111,7 +99,7 @@ class Segment_Dir(Dir):
         super().__init__(version, mode)
         self.segments = segments
 
-    def toElementTree(self):
+    def toElementTree(self, add_used_in):
         """returns an ElementTree Object of the segment directory."""
         root = et.Element('segment_dir')
         tree = et.ElementTree(root)
@@ -144,19 +132,26 @@ class Segment_Dir(Dir):
                 data_element_tag.text = data_element[1]
                 data_elements.append(data_element_tag)
             segment_tag.append(data_elements)
-            used_in = et.Element('used_in')
-            for message in segment.used_in_messages:
-                message_tag = et.Element('message')
-                message_tag.text = message
-                used_in.append(message_tag)
-            segment_tag.append(used_in)
+            if add_used_in is True:
+                used_in = et.Element('used_in')
+                for message in segment.used_in_messages:
+                    message_tag = et.Element('message')
+                    message_tag.text = message
+                    used_in.append(message_tag)
+                segment_tag.append(used_in)
             root.append(segment_tag)
         return tree
 
     def toXML(self, filename):
-        tree = self.toElementTree()
+        tree = self.toElementTree(False)
         with open(filename, 'wb') as f:
             tree.write(f, encoding='utf-8')
+
+    def toXML_string(self):
+        tree = self.toElementTree(False)
+        root = tree.getroot()
+        xml_str = et.tostring(root, encoding='unicode')
+        print(BeautifulSoup(xml_str, 'xml').prettify())
 
 class Composite_Dir(Dir):
     def __init__(self, version, mode, composite_elements):
@@ -289,6 +284,27 @@ class Edifact_Dir(Dir):
 
     def toXML(self, filename, tree):
         """writes a tree to an XML file."""
+        with open(filename, 'wb') as f:
+            tree.write(f, encoding='utf-8')
+
+class Message_Structure():
+    def __init__(self, version, mode, message_type):
+        self.version = version
+        self.mode = mode
+        self.message_type = message_type
+
+    def toElementTree(self):
+        URL = base_URL + self.version.lower() + '/' + self.mode + 'md' + '/' + self.message_type.lower() + '_c.htm'
+        tree = None
+
+        page = get_page_from_URL(URL)
+        if page is not None:
+            soup = BeautifulSoup(page.content, 'html.parser')
+            tree = create_message_element_tree_from_soup(soup, 'orders', URL)
+        return tree
+
+    def toXML(self, filename):
+        tree = self.toElementTree()
         with open(filename, 'wb') as f:
             tree.write(f, encoding='utf-8')
 
@@ -545,6 +561,10 @@ def create_message_element_tree_from_soup(soup, message_type, url):
     """ create message structure from soup and return element tree. """
     a_tags = soup.find_all("a")
     root = et.Element(message_type)
+    root.set('url', url)
+    now = datetime.now()
+    now_formatted = now.strftime("%Y-%m-%dT%H:%M:%S")
+    root.set('creation_date', now_formatted)
     tree = et.ElementTree(root)
     curr_node_stack = []
     curr_node_stack.append(root)
@@ -649,6 +669,10 @@ def create_message_element_tree_from_soup(soup, message_type, url):
                 curr_parent_node.append(node)
     return tree
 
+def string_to_file(my_string, filename):
+    with open(filename, 'wb') as f:
+         f.write(my_string.encode('utf-8'))
+
 def main():
     global verbose
     """used when executed from command line"""
@@ -657,65 +681,56 @@ def main():
     parser.add_argument("version", type=check_version_type, help="EDIFACT release version (ex. d01a)")
     parser.add_argument("mode", nargs='?', type=str, choices={"tr", "ti"}, default='tr', \
                             help="Which EDIFACT mode: tr (batch) or ti (interactive)?")
+    parser.add_argument("-s", "--segment", help="get specific text description of segment  from segment directory", nargs=1)
+    parser.add_argument("-c", "--composite", help="get specific text description of composite element from composite directory", nargs=1)
+    parser.add_argument("-e", "--element", help="get specific text description of data element from segment element directory", nargs=1)
+    parser.add_argument("-sd", "--segment_dir", help="get specific segments from segment directory \
+                                                      and ouput as xml. Provide comma-separated -list of segment tags.", nargs=1)
+    parser.add_argument("-o", "--output_file", help="provide filename of ouput file", nargs=1)
+
     args = parser.parse_args()
     if args.verbose:
         print("verbosity turned on")
         verbose=True
-
     mode = args.mode
     version = args.version
+
+    if args.segment or args.composite or args.element:
+        if args.segment:
+            directory = 'sd'
+            tag = args.segment[0]
+        elif args.composite:
+            directory = 'cd'
+            tag = args.composite[0]
+        elif args.element:
+            directory = 'ed'
+            tag = args.element[0]
+        item = create_item(mode, version, tag, directory)
+        if args.output_file:
+            string_to_file(item.info(), args.output_file[0])
+        else:
+            print(item.info())
+
+    # Creation of segment dir XML
+    if args.segment_dir:
+        tags = args.segment_dir[0].split(',')
+        segments = create_item_list('tr', 'd01b', tags, 'sd')
+        My_seg_dir = Segment_Dir('tr', 'd01b', segments)
+        if args.output_file:
+            My_seg_dir.toXML(args.output_file[0])
+        else:
+            My_seg_dir.toXML_string()
 
     if verbose:
         print(verbose_text)
 
-    # 1) Segment Dir
-    # Get all segments from segment directory and write them in list
-    # tags = get_tags_from_website('tr', 'd01b', 'sd')
-    # segments = create_item_list('tr', 'd01b', tags, 'sd')
-    # for segment in segments:
-    #     segment.info()
-    #     print('------------------------------')
-
-    # 2) Comoposite Dir
-    # Get all composite data elements from composite data element directory and write them in list
-    # tags = get_tags_from_webssegmentsite('tr', 'd01b', 'cd')
-    # composite_data_elements = create_item_list('tr', 'd01b', tags, 'cd')
-    # for composite_data_element in composite_data_elements:
-    #     composite_data_element.info()
-    #     print('------------------------------')
-
-    # 3) Data Element Dir
-    # Get all data elements from element directory and write them in list
-    # tags = get_tags_from_website('tr', 'd01b', 'ed')
-    # tags = ['1131','3055','7364']print('link: |{}|'.format(link))
-    # tags = ['9616','5463']
-    # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
-    # for data_element in data_elements:
-    #     data_element.info()
-    #     print('------------------------------')
-
-    # TEST: Creation of specific segment
-    # item = create_item('tr', 'd01a', 'NAD', 'sd')
-    # item = create_item('tr', 'd01a', '3229', 'ed')
-    # item.info()
-    # print('--------------------------')
-
-    # TEST: Creation of composite data element
-    # item = create_item('tr', 'd01a', 'C002', 'cd')
-    # item.info()
-    # print('--------------------------')
-
-    # TEST: Creation of specific data element
-    # item = create_item('tr', 'd01a', '5463', 'ed')
-    # item = create_item('tr', 'd01a', '1001', 'ed')
-    # item.info()
 
     # TEST: Segment Dir Object with limited tags
-    # tags = ['BGM','DTM','NAD']
+    #tags = ['BGM','DTM','NAD']
     # tags = get_tags_from_website('tr', 'd01b', 'sd')
-    # segments = create_item_list('tr', 'd01b', tags, 'sd')
-    # MySegDir = Segment_Dir('tr', 'd01b', segments)
-    # MySegDir.toXML('myXML.xml')
+    #segments = create_item_list('tr', 'd01b', tags, 'sd')
+    #MySegDir = Segment_Dir('tr', 'd01b', segments)
+    #MySegDir.toXML('myXML.xml')
 
     # tags = get_tags_from_website('tr', 'd01b', 'cd')
     # TEST: Segment Dir Object with limited tags
@@ -742,14 +757,9 @@ def main():
     # edifact_dir = my_edifact_dir.create()
     # my_edifact_dir.toXML('edifact_dir.xml', edifact_dir)
 
-    URL = "https://service.unece.org/trade/untdid/d01b/trmd/orders_c.htm"
-    page = get_page_from_URL(URL)
-
-    if page is not None:
-        soup = BeautifulSoup(page.content, 'html.parser')
-        tree = create_message_element_tree_from_soup(soup, 'orders', URL)
-        with open('test_order_structure.xml', 'wb') as f:
-            tree.write(f, encoding='utf-8')
+    # Test creation of message structure
+    # my_orders = Message_Structure(version, mode, 'ORDERS')
+    # my_orders.toXML('test_order_structure.xml')
 
 if __name__ == "__main__":
     main()
