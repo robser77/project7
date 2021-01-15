@@ -94,6 +94,17 @@ class Dir():
         self.version = version
         self.mode = mode
 
+    def toXML(self, filename):
+        tree = self.toElementTree(False)
+        with open(filename, 'wb') as f:
+            tree.write(f, encoding='utf-8')
+
+    def toXML_string(self):
+        tree = self.toElementTree(False)
+        root = tree.getroot()
+        xml_str = et.tostring(root, encoding='unicode')
+        print(BeautifulSoup(xml_str, 'xml').prettify())
+
 class Segment_Dir(Dir):
     def __init__(self, version, mode, segments):
         super().__init__(version, mode)
@@ -142,23 +153,12 @@ class Segment_Dir(Dir):
             root.append(segment_tag)
         return tree
 
-    def toXML(self, filename):
-        tree = self.toElementTree(False)
-        with open(filename, 'wb') as f:
-            tree.write(f, encoding='utf-8')
-
-    def toXML_string(self):
-        tree = self.toElementTree(False)
-        root = tree.getroot()
-        xml_str = et.tostring(root, encoding='unicode')
-        print(BeautifulSoup(xml_str, 'xml').prettify())
-
 class Composite_Dir(Dir):
     def __init__(self, version, mode, composite_elements):
         super().__init__(version, mode)
         self.composite_elements = composite_elements
 
-    def toElementTree(self):
+    def toElementTree(self, add_used_in):
         """returns an ElementTree Object of the composite directory."""
         root = et.Element('composite_dir')
         tree = et.ElementTree(root)
@@ -193,17 +193,12 @@ class Composite_Dir(Dir):
             root.append(composite_element_tag)
         return tree
 
-    def toXML(self, filename):
-        tree = self.toElementTree()
-        with open(filename, 'wb') as f:
-            tree.write(f, encoding='utf-8')
-
 class Element_Dir(Dir):
     def __init__(self, version, mode, data_elements):
         super().__init__(version, mode)
         self.data_elements = data_elements
 
-    def toElementTree(self):
+    def toElementTree(self, add_used_in):
         """returns an ElementTree Object of the data element directory."""
         root = et.Element('element_dir')
         tree = et.ElementTree(root)
@@ -240,11 +235,6 @@ class Element_Dir(Dir):
             root.append(data_element_tag)
         return tree
 
-    def toXML(self, filename):
-        tree = self.toElementTree()
-        with open(filename, 'wb') as f:
-            tree.write(f, encoding='utf-8')
-
 class Edifact_Dir(Dir):
     def __init__(self, version, mode):
         super().__init__(version, mode)
@@ -253,19 +243,19 @@ class Edifact_Dir(Dir):
         """Returns an ElementTree Object of the segment directory."""
         tags = get_tags_from_website(self.version, self.mode, 'sd')
         segments = create_item_list(self.version, self.mode, tags, 'sd')
-        return Segment_Dir(self.version, self.mode, segments).toElementTree()
+        return Segment_Dir(self.version, self.mode, segments).toElementTree(False)
 
     def create_composite_directory_tree(self):
         """Returns an ElementTree Object of the composite directory."""
         tags = get_tags_from_website(self.version, self.mode, 'cd')
         composite_elements = create_item_list(self.version, self.mode, tags, 'cd')
-        return Composite_Dir(self.version, self.mode, composite_elements).toElementTree()
+        return Composite_Dir(self.version, self.mode, composite_elements).toElementTree(False)
 
     def create_data_element_directory_tree(self):
         """Returns an ElementTree Object of the data element directory."""
         tags = get_tags_from_website(self.version, self.mode, 'ed')
         data_elements = create_item_list(self.version, self.mode, tags, 'ed')
-        return Element_Dir(self.version, self.mode, data_elements).toElementTree()
+        return Element_Dir(self.version, self.mode, data_elements).toElementTree(False)
 
     def create(self):
         """returns an ElementTree Object of the edifact directory."""
@@ -332,7 +322,6 @@ def get_page_from_URL(URL):
     while page is None:
         try:
             page = requests.get(URL)
-            if verbose: print('OK')
         except:
             if verbose: print('Oops! ... trying again ...', end = '')
     return page
@@ -373,32 +362,41 @@ def get_tags_from_website(mode, version, type):
 def create_item(mode, version, tag, type):
     URL = base_URL + version.lower() + '/' + mode + type + '/' + mode + type + tag.lower() + '.htm'
     if verbose: print('...from {} ...getting tag: {} - '.format(URL, tag), end = '')
-
     page = get_page_from_URL(URL)
+
     if page is not None:
         soup = BeautifulSoup(page.content, 'html.parser')
-
-        if type == 'ed':
-            item = get_data_element_from_soup(soup, type, URL)
+        title = soup.find("title").text
+        if title == '404 Not Found':
+            raise requests.HTTPError(title)
         else:
-            item = get_item_from_soup(soup, type, URL)
-        return item
+            if verbose: print('OK')
+            if type == 'ed':
+                item = get_data_element_from_soup(soup, type, URL)
+            else:
+                item = get_item_from_soup(soup, type, URL)
+            return item
     else:
         return None
 
 def create_item_list(mode, version, tags, type):
     """to create and return a list of segment, composite or data_element objects."""
     global verbose_text
-
     check_mode_type(mode)
     check_version_type(version)
     if verbose: print('Getting all single tags from their URL.')
     items = []
     for tag in tags:
-        items.append(create_item(mode, version, tag, type))
-    if verbose: print('Build {} items of type {}-structures out of {} tags.'.format(len(items), type, len(tags)))
-    if verbose and len(items) == len(tags): print('Looks good!')
-
+        try:
+            item = create_item(mode, version, tag, type)
+        except requests.HTTPError as error:
+            print(error)
+            continue
+        else:
+            items.append(item)
+    if verbose: print('Build {} items out of {} tags from {}.'.format(len(items), len(tags), type),  end = '')
+    if verbose and len(items) == len(tags): print(' - Looks good!')
+    elif verbose: print(' - Oops, something is missing!')
     return items
 
 def get_item_from_soup(soup, type, url):
@@ -673,20 +671,67 @@ def string_to_file(my_string, filename):
     with open(filename, 'wb') as f:
          f.write(my_string.encode('utf-8'))
 
+def check_segment_tag(tag):
+    return check_tag(tag, 's')
+
+def check_composite_tag(tag):
+    return check_tag(tag, 'c')
+
+def check_element_tag(tag):
+    return check_tag(tag, 'e')
+
+def check_tag(tag, type):
+    if type is 's':
+        type_name = 'Segment'
+        pat=re.compile(r"^[a-zA-Z]{3}$")
+    if type == 'c':
+        type_name = 'Composite Element'
+        pat=re.compile(r"^[cC][0-9]{3}$")
+    if type == 'e':
+        type_name = 'Data Element'
+        pat=re.compile(r"^[0-9]{4}$")
+    error = 'Invalid formatting of {}: {}'.format(type_name, tag)
+    if (not pat.match(tag) and tag != 'full') and __name__ == "__main__":
+        raise argparse.ArgumentTypeError(error)
+    elif not pat.match(tag) and tag != 'full':
+        raise ValueError(error)
+    return tag
+
 def main():
     global verbose
     """used when executed from command line"""
+
+    # help texts
+    h_verbose = 'Increase output verbosity'
+    h_version = 'EDIFACT release version (ex. d01a)'
+    h_mode = 'Which EDIFACT mode: tr (batch) or ti (interactive)?'
+    h_segment = 'Get specific text description of segment  from segment directory'
+    h_composite = 'Get specific text description of composite element from composite directory'
+    h_element = 'Get specific text description of data element from segment element directory'
+    h_sd = 'Get specific segments from segment directory and ouput \
+            as xml. Provide comma-separated list of segment tags or "full" for complete directory.'
+    h_cd = 'Get specific composite elements from composite directory and ouput \
+            as xml. Provide comma-separated list of composite element tags or "full" for complete directory.'
+    h_ed = 'Get specific data elements from element directory and ouput \
+            as xml. Provide comma-separated list of data element tags or "full" for complete directory.'
+    h_full_edifact_dir = 'Get all and complete directories (sd, cd, ed) and ouput \
+                          in one xml file.'
+    h_output = 'Provide filename of ouput file'
+    h_xml_version = 'Define if you want full word tags or abbreviated tag names (less heavy output).'
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
-    parser.add_argument("version", type=check_version_type, help="EDIFACT release version (ex. d01a)")
-    parser.add_argument("mode", nargs='?', type=str, choices={"tr", "ti"}, default='tr', \
-                            help="Which EDIFACT mode: tr (batch) or ti (interactive)?")
-    parser.add_argument("-s", "--segment", help="get specific text description of segment  from segment directory", nargs=1)
-    parser.add_argument("-c", "--composite", help="get specific text description of composite element from composite directory", nargs=1)
-    parser.add_argument("-e", "--element", help="get specific text description of data element from segment element directory", nargs=1)
-    parser.add_argument("-sd", "--segment_dir", help="get specific segments from segment directory \
-                                                      and ouput as xml. Provide comma-separated -list of segment tags.", nargs=1)
-    parser.add_argument("-o", "--output_file", help="provide filename of ouput file", nargs=1)
+    parser.add_argument("-v", "--verbose", help=h_verbose, action="store_true")
+    parser.add_argument("version", type=check_version_type, help=h_version)
+    parser.add_argument("mode", nargs='?', type=str, choices={"tr", "ti"}, default='tr', help=h_mode)
+    parser.add_argument("-s", "--segment", type=check_segment_tag, help=h_segment, nargs=1)
+    parser.add_argument("-c", "--composite", type=check_composite_tag, help=h_composite, nargs=1)
+    parser.add_argument("-e", "--element", type=check_element_tag, help=h_element, nargs=1)
+    parser.add_argument("-sd", "--segment_dir", help=h_sd, nargs=1)
+    parser.add_argument("-cd", "--composite_dir", help=h_cd, nargs=1)
+    parser.add_argument("-ed", "--element_dir", help=h_ed, nargs=1)
+    parser.add_argument("-f", "--full_edifact_dir", help=h_full_edifact_dir, action="store_true")
+    parser.add_argument("-o", "--output_file", help=h_output, nargs=1)
+    parser.add_argument("-xml", "--xml_version", help=h_xml_version, nargs=1)
 
     args = parser.parse_args()
     if args.verbose:
@@ -694,66 +739,114 @@ def main():
         verbose=True
     mode = args.mode
     version = args.version
-
+    # Create single tags as text output
     if args.segment or args.composite or args.element:
         if args.segment:
-            directory = 'sd'
+            type = 'sd'
             tag = args.segment[0]
         elif args.composite:
-            directory = 'cd'
+            type = 'cd'
             tag = args.composite[0]
         elif args.element:
-            directory = 'ed'
+            type = 'ed'
             tag = args.element[0]
-        item = create_item(mode, version, tag, directory)
-        if args.output_file:
-            string_to_file(item.info(), args.output_file[0])
+        try:
+            item = create_item(mode, version, tag, type)
+        except requests.HTTPError as error:
+            print(error)
         else:
-            print(item.info())
+            if item is not None:
+                if args.output_file:
+                    string_to_file(item.info(), args.output_file[0])
+                else:
+                    print(item.info())
 
-    # Creation of segment dir XML
-    if args.segment_dir:
-        tags = args.segment_dir[0].split(',')
-        segments = create_item_list('tr', 'd01b', tags, 'sd')
-        My_seg_dir = Segment_Dir('tr', 'd01b', segments)
+    # Create full edifact directory
+    if args.full_edifact_dir:
+        my_edifact_dir = Edifact_Dir(mode, version)
+        edifact_dir = my_edifact_dir.create()
         if args.output_file:
-            My_seg_dir.toXML(args.output_file[0])
+            filename = args.output_file[0]
         else:
-            My_seg_dir.toXML_string()
+            filename = 'output.xml'
+        if verbose: print('Writing XMLfile: {}'.format(filename))
+        my_edifact_dir.toXML(filename, edifact_dir)
+
+    # Create full segment directory
+    if args.segment_dir and args.segment_dir[0] == 'full':
+        my_edifact_dir = Edifact_Dir(mode, version)
+        my_seg_dir = my_edifact_dir.create_segment_directory_tree()
+        if args.output_file:
+            filename = args.output_file[0]
+        else:
+            filename = 'output.xml'
+        if verbose: print('Writing XMLfile: {}'.format(filename))
+        my_edifact_dir.toXML(filename, my_seg_dir)
+
+    # Create full composite directory
+    elif args.composite_dir and args.composite_dir[0] == 'full':
+        my_edifact_dir = Edifact_Dir(mode, version)
+        my_comp_dir = my_edifact_dir.create_composite_directory_tree()
+        if args.output_file:
+            filename = args.output_file[0]
+        else:
+            filename = 'output.xml'
+        if verbose: print('Writing XMLfile: {}'.format(filename))
+        my_edifact_dir.toXML(filename, my_comp_dir)
+
+    # Create full element directory
+    elif args.element_dir and args.element_dir[0] == 'full':
+        my_edifact_dir = Edifact_Dir(mode, version)
+        my_ele_dir = my_edifact_dir.create_data_element_directory_tree()
+        if args.output_file:
+            filename = args.output_file[0]
+        else:
+            filename = 'output.xml'
+        if verbose: print('Writing XMLfile: {}'.format(filename))
+        my_edifact_dir.toXML(filename, my_ele_dir)
+
+    # Create xml directories based on given tags
+    elif args.segment_dir or args.composite_dir or args.element_dir:
+        if args.segment_dir:
+            tags = args.segment_dir[0].split(',')
+            function = check_segment_tag
+            type = 'sd'
+        elif args.composite_dir:
+            tags = args.composite_dir[0].split(',')
+            function = check_composite_tag
+            type = 'cd'
+        elif args.element_dir:
+            tags = args.element_dir[0].split(',')
+            function = check_element_tag
+            type = 'ed'
+        errors = list()
+        for tag in tags:
+            try:
+                function(tag)
+            except argparse.ArgumentTypeError as error:
+                errors.append(error)
+        if len(errors) > 0:
+            for error in errors:
+                print('Error: {}'.format(error))
+            quit()
+
+        items = create_item_list(mode, version, tags, type)
+        if type == 'sd':
+            my_dir = Segment_Dir(mode, version, items)
+        elif type == 'cd':
+            my_dir = Composite_Dir(mode, version, items)
+        elif type == 'ed':
+            my_dir = Element_Dir(mode, version, items)
+
+        if args.output_file:
+            my_dir.toXML(args.output_file[0])
+        else:
+            my_dir.toXML_string()
 
     if verbose:
         print(verbose_text)
 
 
-    # TEST: Segment Dir Object with limited tags
-    #tags = ['BGM','DTM','NAD']
-    # tags = get_tags_from_website('tr', 'd01b', 'sd')
-    #segments = create_item_list('tr', 'd01b', tags, 'sd')
-    #MySegDir = Segment_Dir('tr', 'd01b', segments)
-    #MySegDir.toXML('myXML.xml')
-
-    # tags = get_tags_from_website('tr', 'd01b', 'cd')
-    # TEST: Segment Dir Object with limited tags
-    # composite_elements = create_item_list('tr', 'd01b', tags, 'cd')
-    # MyComDir = Composite_Dir('tr', 'd01b', composite_elements)
-    # MyComDir.toXML('myComDirXML.xml')
-
-    # TEST: Data Element Dir Object with limited tags
-    # tags = ['9616','546tree = et.ElementTree(root)3']
-    # tags = get_tags_from_website('tr', 'd01b', 'ed')
-    # data_elements = create_item_list('tr', 'd01b', tags, 'ed')
-    # MyElemDir = Element_Dir('tr', 'd01b', data_elements)
-    # MyElemDir.toXML('myElemDirXML.xml')
-
-    # Edifact_Dir - TESTs
-    # my_edifact_dir = Edifact_Dir('tr','d01b')
-
-    # seg_dir = my_edifact_dir.create_segment_directory_tree()
-    # my_edifact_dir.toXML('seg_dir.xml', seg_dir)
-    # comp_dir = my_edifact_dir.create_composite_directory_tree()
-    # my_edifact_dir.toXML('comp_dir.xml', comp_dir)
-    # elem_dir = my_edifact_dir.create_data_element_directory_tree()
-    # my_edifact_dir.toXML('elem_dir.xml', elem_dir)
     # edifact_dir = my_edifact_dir.create()
     # my_edifact_dir.toXML('edifact_dir.xml', edifact_dir)
 
