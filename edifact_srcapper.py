@@ -7,6 +7,7 @@ from xml.etree import ElementTree as et
 from datetime import datetime
 
 #TODO start
+# fix sd - TCC gives #
 # Quality Checks
 # Create light-weight XML by reducing tag names to minimum
 # Check if toXml methods can be unified
@@ -90,17 +91,44 @@ class CodeItem():
         self.description = description
 
 class Dir():
+    codes_tag_name = ['codes', 'co']
+    code_tag_name = ['code', 'c']
+    composite_data_element_tag_name = ['composite_data_element', 'c']
+    composite_dir_tag_name = ['composite_dir', 'cd']
+    composite_type = ['composite', 'c']
+    data_elements_tag_name = ['data_elements', 'de']
+    data_element_tag_name = ['data_element', 'e']
+    description_tag_name = ['description', 'd']
+    edifact_directory_tag_name = ['edifact_directory','edi_d']
+    element_dir_tag_name = ['element_dir', 'ed']
+    format_tag_name = ['format', 'fo']
+    function_tag_name = ['function', 'f']
+    message_tag_name = ['message', 'm']
+    mode_att_name = ['mode','m']
+    name_tag_name = ['name', 'n']
+    pos_att_name = ['pos', 'p']
+    segment_dir_tag_name = ['segment_dir', 'sd']
+    segment_tag_name = ['segment', 's']
+    simple_type = ['simple', 's']
+    status_att_name = ['status', 's']
+    tag_att_name = ['tag', 't']
+    type_att_name = ['type', 't']
+    url_att_name = ['url', 'u']
+    used_in_tag_name = ['used_in', 'ui']
+    value_tag_name = ['value', 'v']
+    version_att_name = ['vesion','v']
+
     def __init__(self, version, mode):
         self.version = version
         self.mode = mode
 
-    def toXML(self, filename):
-        tree = self.toElementTree(False)
+    def toXML(self, filename, add_used_in, use_short_tags):
+        tree = self.toElementTree(add_used_in, use_short_tags)
         with open(filename, 'wb') as f:
             tree.write(f, encoding='utf-8')
 
-    def toXML_string(self):
-        tree = self.toElementTree(False)
+    def toXML_string(self, add_used_in, use_short_tags):
+        tree = self.toElementTree(add_used_in, use_short_tags)
         root = tree.getroot()
         xml_str = et.tostring(root, encoding='unicode')
         print(BeautifulSoup(xml_str, 'xml').prettify())
@@ -110,43 +138,42 @@ class Segment_Dir(Dir):
         super().__init__(version, mode)
         self.segments = segments
 
-    def toElementTree(self, add_used_in):
+    def toElementTree(self, add_used_in, use_short_tags):
         """returns an ElementTree Object of the segment directory."""
-        root = et.Element('segment_dir')
+
+        version = 0 if use_short_tags is False else 1
+        root = et.Element(self.segment_dir_tag_name[version])
         tree = et.ElementTree(root)
 
         for i, segment in enumerate(self.segments):
-
-            if verbose:
-                print('{} segment to XML Node...'.format(segment.tag))
-
-            segment_tag = et.Element('segment')
-            segment_tag.set('tag', segment.tag)
-            segment_tag.set('url', segment.url)
-            name = et.Element('name')
+            if verbose: print('{} segment to XML Node...'.format(segment.tag))
+            segment_tag = et.Element(self.segment_tag_name[version])
+            segment_tag.set(self.tag_att_name[version], segment.tag)
+            if use_short_tags is False:
+                segment_tag.set(self.url_att_name[version], segment.url)
+            name = et.Element(self.name_tag_name[version])
             name.text = segment.name
             segment_tag.append(name)
-            function = et.Element('function')
+            function = et.Element(self.function_tag_name[version])
             function.text = segment.function
             segment_tag.append(function)
-            data_elements = et.Element('data_elements')
+            data_elements = et.Element(self.data_elements_tag_name[version])
             for data_element in segment.data_elements:
-                data_element_tag = et.Element('data_element')
-                data_element_tag.set('pos', str(data_element[0]))
-                #pos = et.Element('pos_' + str(data_element[0]))
-                data_element_tag.set('status', data_element[2])
+                data_element_tag = et.Element(self.data_element_tag_name[version])
+                data_element_tag.set(self.pos_att_name[version], str(data_element[0]))
+                data_element_tag.set(self.status_att_name[version], data_element[2])
                 if data_element[1].startswith('C'):
-                    type = 'composite'
+                    type = self.composite_type[version]
                 else:
-                    type = 'simple'
-                data_element_tag.set('type', type)
+                    type = self.simple_type[version]
+                data_element_tag.set(self.type_att_name[version], type)
                 data_element_tag.text = data_element[1]
                 data_elements.append(data_element_tag)
             segment_tag.append(data_elements)
-            if add_used_in is True:
-                used_in = et.Element('used_in')
+            if add_used_in is True and use_short_tags is False:
+                used_in = et.Element(self.used_in_tag_name[version])
                 for message in segment.used_in_messages:
-                    message_tag = et.Element('message')
+                    message_tag = et.Element(self.message_tag_name[version])
                     message_tag.text = message
                     used_in.append(message_tag)
                 segment_tag.append(used_in)
@@ -158,38 +185,40 @@ class Composite_Dir(Dir):
         super().__init__(version, mode)
         self.composite_elements = composite_elements
 
-    def toElementTree(self, add_used_in):
+    def toElementTree(self, add_used_in, use_short_tags):
         """returns an ElementTree Object of the composite directory."""
-        root = et.Element('composite_dir')
-        tree = et.ElementTree(root)
 
+        version = 0 if use_short_tags is False else 1
+        root = et.Element(self.composite_dir_tag_name[version])
+        tree = et.ElementTree(root)
         for i, composite_element in enumerate(self.composite_elements):
             if verbose:
                 print('{} composite_data_element to XML Node...'.format(composite_element.tag))
-
-            composite_element_tag = et.Element('composite_data_element')
-            composite_element_tag.set('tag', composite_element.tag)
-            composite_element_tag.set('url', composite_element.url)
-            name = et.Element('name')
+            composite_element_tag = et.Element(self.composite_data_element_tag_name[version])
+            composite_element_tag.set(self.tag_att_name[version], composite_element.tag)
+            if use_short_tags is False:
+                composite_element_tag.set(self.url_att_name[version], composite_element.url)
+            name = et.Element(self.name_tag_name[version])
             name.text = composite_element.name
             composite_element_tag.append(name)
-            function = et.Element('function')
+            function = et.Element(self.function_tag_name[version])
             function.text = composite_element.function
             composite_element_tag.append(function)
-            data_elements = et.Element('data_elements')
+            data_elements = et.Element(self.data_elements_tag_name[version])
             for data_element in composite_element.data_elements:
-                data_element_tag = et.Element('data_element')
-                data_element_tag.set('pos', str(data_element[0]))
-                data_element_tag.set('status', data_element[2])
+                data_element_tag = et.Element(self.data_element_tag_name[version])
+                data_element_tag.set(self.pos_att_name[version], str(data_element[0]))
+                data_element_tag.set(self.status_att_name[version], data_element[2])
                 data_element_tag.text = data_element[1]
                 data_elements.append(data_element_tag)
             composite_element_tag.append(data_elements)
-            used_in = et.Element('used_in')
-            for segment in composite_element.used_in_segments:
-                segment_tag = et.Element('segment')
-                segment_tag.text = segment
-                used_in.append(segment_tag)
-            composite_element_tag.append(used_in)
+            if add_used_in is True and use_short_tags is False:
+                used_in = et.Element(self.used_in_tag_name[version])
+                for segment in composite_element.used_in_segments:
+                    segment_tag = et.Element(self.segment_tag_name[version])
+                    segment_tag.text = segment
+                    used_in.append(segment_tag)
+                composite_element_tag.append(used_in)
             root.append(composite_element_tag)
         return tree
 
@@ -198,36 +227,39 @@ class Element_Dir(Dir):
         super().__init__(version, mode)
         self.data_elements = data_elements
 
-    def toElementTree(self, add_used_in):
+    def toElementTree(self, add_used_in, use_short_tags):
         """returns an ElementTree Object of the data element directory."""
-        root = et.Element('element_dir')
+
+        version = 0 if use_short_tags is False else 1
+        root = et.Element(self.element_dir_tag_name[version])
         tree = et.ElementTree(root)
 
         for i, data_element in enumerate(self.data_elements):
             if verbose:
                 print('{} data_element to XML Node...'.format(data_element.tag))
-            data_element_tag = et.Element('data_element')
-            data_element_tag.set('tag', data_element.tag)
-            data_element_tag.set('url', data_element.url)
-            name = et.Element('name')
+            data_element_tag = et.Element(self.data_element_tag_name[version])
+            data_element_tag.set(self.tag_att_name[version], data_element.tag)
+            if use_short_tags == False:
+                data_element_tag.set(self.url_att_name[version], data_element.url)
+            name = et.Element(self.name_tag_name[version])
             name.text = data_element.name
             data_element_tag.append(name)
-            function = et.Element('function')
+            function = et.Element(self.function_tag_name[version])
             function.text = data_element.function
             data_element_tag.append(function)
-            format = et.Element('format')
+            format = et.Element(self.format_tag_name[version])
             format.text = data_element.format
             data_element_tag.append(format)
-            codes = et.Element('codes')
+            codes = et.Element(self.codes_tag_name[version])
             for code in data_element.code_list:
-                code_tag = et.Element('code')
-                value = et.Element('value')
+                code_tag = et.Element(self.code_tag_name[version])
+                value = et.Element(self.value_tag_name[version])
                 value.text = code.value
                 code_tag.append(value)
-                name = et.Element('name')
+                name = et.Element(self.name_tag_name[version])
                 name.text = code.name
                 code_tag.append(name)
-                description = et.Element('description')
+                description = et.Element(self.description_tag_name[version])
                 description.text = code.description
                 code_tag.append(description)
                 codes.append(code_tag)
@@ -239,34 +271,35 @@ class Edifact_Dir(Dir):
     def __init__(self, version, mode):
         super().__init__(version, mode)
 
-    def create_segment_directory_tree(self):
+    def create_segment_directory_tree(self, used_in, use_short_tags):
         """Returns an ElementTree Object of the segment directory."""
         tags = get_tags_from_website(self.version, self.mode, 'sd')
         segments = create_item_list(self.version, self.mode, tags, 'sd')
-        return Segment_Dir(self.version, self.mode, segments).toElementTree(False)
+        return Segment_Dir(self.version, self.mode, segments).toElementTree(False, use_short_tags)
 
-    def create_composite_directory_tree(self):
+    def create_composite_directory_tree(self, used_in, use_short_tags):
         """Returns an ElementTree Object of the composite directory."""
         tags = get_tags_from_website(self.version, self.mode, 'cd')
         composite_elements = create_item_list(self.version, self.mode, tags, 'cd')
-        return Composite_Dir(self.version, self.mode, composite_elements).toElementTree(False)
+        return Composite_Dir(self.version, self.mode, composite_elements).toElementTree(False, use_short_tags)
 
-    def create_data_element_directory_tree(self):
+    def create_data_element_directory_tree(self, used_in, use_short_tags):
         """Returns an ElementTree Object of the data element directory."""
         tags = get_tags_from_website(self.version, self.mode, 'ed')
         data_elements = create_item_list(self.version, self.mode, tags, 'ed')
-        return Element_Dir(self.version, self.mode, data_elements).toElementTree(False)
+        return Element_Dir(self.version, self.mode, data_elements).toElementTree(False, use_short_tags)
 
-    def create(self):
+    def create(self, used_in, use_short_tags):
         """returns an ElementTree Object of the edifact directory."""
-        segment_dir_tree = self.create_segment_directory_tree()
-        composite_dir_tree = self.create_composite_directory_tree()
-        data_element_dir_tree = self.create_data_element_directory_tree()
+        segment_dir_tree = self.create_segment_directory_tree(used_in, use_short_tags)
+        composite_dir_tree = self.create_composite_directory_tree(used_in, use_short_tags)
+        data_element_dir_tree = self.create_data_element_directory_tree(used_in, use_short_tags)
 
-        root = et.Element('edifact_directory')
+        version = 0 if use_short_tags is False else 1
+        root = et.Element(self.edifact_directory_tag_name[version])
         tree = et.ElementTree(root)
-        root.set('version', self.version)
-        root.set('mode', self.mode)
+        root.set(self.version_att_name[version], self.version)
+        root.set(self.mode_att_name[version], self.mode)
         root.append(segment_dir_tree.getroot())
         root.append(composite_dir_tree.getroot())
         root.append(data_element_dir_tree.getroot())
@@ -700,7 +733,6 @@ def check_tag(tag, type):
 def main():
     global verbose
     """used when executed from command line"""
-
     # help texts
     h_verbose = 'Increase output verbosity'
     h_version = 'EDIFACT release version (ex. d01a)'
@@ -717,7 +749,7 @@ def main():
     h_full_edifact_dir = 'Get all and complete directories (sd, cd, ed) and ouput \
                           in one xml file.'
     h_output = 'Provide filename of ouput file'
-    h_xml_version = 'Define if you want full word tags or abbreviated tag names (less heavy output).'
+    h_short_tags = 'Use if you want abbreviated xml tag names (less heavy output).'
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help=h_verbose, action="store_true")
@@ -731,7 +763,7 @@ def main():
     parser.add_argument("-ed", "--element_dir", help=h_ed, nargs=1)
     parser.add_argument("-f", "--full_edifact_dir", help=h_full_edifact_dir, action="store_true")
     parser.add_argument("-o", "--output_file", help=h_output, nargs=1)
-    parser.add_argument("-xml", "--xml_version", help=h_xml_version, nargs=1)
+    parser.add_argument("--short_tags", help=h_short_tags, action="store_true")
 
     args = parser.parse_args()
     if args.verbose:
@@ -739,7 +771,9 @@ def main():
         verbose=True
     mode = args.mode
     version = args.version
-    # Create single tags as text output
+    use_short_tags = True if args.short_tags == True else False
+    filename = 'output.xml' if not args.output_file else args.output_file[0]
+
     if args.segment or args.composite or args.element:
         if args.segment:
             type = 'sd'
@@ -764,44 +798,28 @@ def main():
     # Create full edifact directory
     if args.full_edifact_dir:
         my_edifact_dir = Edifact_Dir(mode, version)
-        edifact_dir = my_edifact_dir.create()
-        if args.output_file:
-            filename = args.output_file[0]
-        else:
-            filename = 'output.xml'
+        edifact_dir = my_edifact_dir.create(False, use_short_tags)
         if verbose: print('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, edifact_dir)
 
     # Create full segment directory
     if args.segment_dir and args.segment_dir[0] == 'full':
         my_edifact_dir = Edifact_Dir(mode, version)
-        my_seg_dir = my_edifact_dir.create_segment_directory_tree()
-        if args.output_file:
-            filename = args.output_file[0]
-        else:
-            filename = 'output.xml'
+        my_seg_dir = my_edifact_dir.create_segment_directory_tree(False, use_short_tags)
         if verbose: print('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, my_seg_dir)
 
     # Create full composite directory
     elif args.composite_dir and args.composite_dir[0] == 'full':
         my_edifact_dir = Edifact_Dir(mode, version)
-        my_comp_dir = my_edifact_dir.create_composite_directory_tree()
-        if args.output_file:
-            filename = args.output_file[0]
-        else:
-            filename = 'output.xml'
+        my_comp_dir = my_edifact_dir.create_composite_directory_tree(False, use_short_tags)
         if verbose: print('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, my_comp_dir)
 
     # Create full element directory
     elif args.element_dir and args.element_dir[0] == 'full':
         my_edifact_dir = Edifact_Dir(mode, version)
-        my_ele_dir = my_edifact_dir.create_data_element_directory_tree()
-        if args.output_file:
-            filename = args.output_file[0]
-        else:
-            filename = 'output.xml'
+        my_ele_dir = my_edifact_dir.create_data_element_directory_tree(False, use_short_tags)
         if verbose: print('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, my_ele_dir)
 
@@ -839,16 +857,13 @@ def main():
             my_dir = Element_Dir(mode, version, items)
 
         if args.output_file:
-            my_dir.toXML(args.output_file[0])
+            my_dir.toXML(args.output_file[0], False, use_short_tags)
+            if verbose: print('Writing XMLfile: {}'.format(filename))
         else:
-            my_dir.toXML_string()
+            my_dir.toXML_string(False, use_short_tags)
 
     if verbose:
         print(verbose_text)
-
-
-    # edifact_dir = my_edifact_dir.create()
-    # my_edifact_dir.toXML('edifact_dir.xml', edifact_dir)
 
     # Test creation of message structure
     # my_orders = Message_Structure(version, mode, 'ORDERS')
