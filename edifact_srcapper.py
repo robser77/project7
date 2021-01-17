@@ -7,9 +7,7 @@ from xml.etree import ElementTree as et
 from datetime import datetime
 
 #TODO start
-# fix sd - TCC gives #
 # Quality Checks
-# Create light-weight XML by reducing tag names to minimum
 # Check if toXml methods can be unified
 #
 #TODO end
@@ -314,22 +312,33 @@ class Message_Structure():
     def __init__(self, version, mode, message_type):
         self.version = version
         self.mode = mode
-        self.message_type = message_type
+        self.message_type = message_type.lower()
 
     def toElementTree(self):
-        URL = base_URL + self.version.lower() + '/' + self.mode + 'md' + '/' + self.message_type.lower() + '_c.htm'
+        URL = base_URL + self.version.lower() + '/' + self.mode + 'md' + '/' + self.message_type + '_c.htm'
+        if verbose: print('...from {} ...getting tag: {} - '.format(URL, self.message_type), end = '')
         tree = None
 
         page = get_page_from_URL(URL)
         if page is not None:
             soup = BeautifulSoup(page.content, 'html.parser')
-            tree = create_message_element_tree_from_soup(soup, 'orders', URL)
+            title = soup.find("title").text
+            if title == '404 Not Found':
+                raise requests.HTTPError(title)
+            else:
+                if verbose: print('OK')
+                tree = create_message_element_tree_from_soup(soup, self.message_type, URL)
         return tree
 
     def toXML(self, filename):
-        tree = self.toElementTree()
-        with open(filename, 'wb') as f:
-            tree.write(f, encoding='utf-8')
+        try:
+            tree = self.toElementTree()
+        except requests.HTTPError as error:
+            print(error)
+        else:
+            with open(filename, 'wb') as f:
+                if verbose: print('Writing XMLfile: {}'.format(filename))
+                tree.write(f, encoding='utf-8')
 
 def check_version_type(version, pat=re.compile(r"^[dD][0-9]{2}[abAB]$")):
     """check if syntactically valid EDIFACT version."""
@@ -438,7 +447,9 @@ def get_item_from_soup(soup, type, url):
     #extract tag and name
     tag_name = soup.find("h3")
 
-    if tag_name.text.lstrip().startswith('X') or tag_name.text.lstrip().startswith('-'):
+    if tag_name.text.lstrip().startswith('X') or \
+        tag_name.text.lstrip().startswith('-') or \
+        tag_name.text.lstrip().startswith('#'):
         tag_name_tmp = tag_name.text.lstrip()[3:]
     else:
         tag_name_tmp = tag_name.text
@@ -713,16 +724,23 @@ def check_composite_tag(tag):
 def check_element_tag(tag):
     return check_tag(tag, 'e')
 
+def check_message_tag(tag):
+    return check_tag(tag, 'm')
+
 def check_tag(tag, type):
     if type is 's':
         type_name = 'Segment'
         pat=re.compile(r"^[a-zA-Z]{3}$")
-    if type == 'c':
+    elif type == 'c':
         type_name = 'Composite Element'
         pat=re.compile(r"^[cC][0-9]{3}$")
-    if type == 'e':
+    elif type == 'e':
         type_name = 'Data Element'
         pat=re.compile(r"^[0-9]{4}$")
+    elif type == 'm':
+        type_name = 'Message Name'
+        pat=re.compile(r"^[a-zA-Z]{6}$")
+
     error = 'Invalid formatting of {}: {}'.format(type_name, tag)
     if (not pat.match(tag) and tag != 'full') and __name__ == "__main__":
         raise argparse.ArgumentTypeError(error)
@@ -750,6 +768,7 @@ def main():
                           in one xml file.'
     h_output = 'Provide filename of ouput file'
     h_short_tags = 'Use if you want abbreviated xml tag names (less heavy output).'
+    h_structure = 'Generate an xml output of the given message structure.'
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", help=h_verbose, action="store_true")
@@ -764,6 +783,7 @@ def main():
     parser.add_argument("-f", "--full_edifact_dir", help=h_full_edifact_dir, action="store_true")
     parser.add_argument("-o", "--output_file", help=h_output, nargs=1)
     parser.add_argument("--short_tags", help=h_short_tags, action="store_true")
+    parser.add_argument("-st", "--structure", type=check_message_tag, help=h_structure, nargs=1)
 
     args = parser.parse_args()
     if args.verbose:
@@ -774,6 +794,7 @@ def main():
     use_short_tags = True if args.short_tags == True else False
     filename = 'output.xml' if not args.output_file else args.output_file[0]
 
+    # Create text information to different tags.
     if args.segment or args.composite or args.element:
         if args.segment:
             type = 'sd'
@@ -796,14 +817,14 @@ def main():
                     print(item.info())
 
     # Create full edifact directory
-    if args.full_edifact_dir:
+    elif args.full_edifact_dir:
         my_edifact_dir = Edifact_Dir(mode, version)
         edifact_dir = my_edifact_dir.create(False, use_short_tags)
         if verbose: print('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, edifact_dir)
 
     # Create full segment directory
-    if args.segment_dir and args.segment_dir[0] == 'full':
+    elif args.segment_dir and args.segment_dir[0] == 'full':
         my_edifact_dir = Edifact_Dir(mode, version)
         my_seg_dir = my_edifact_dir.create_segment_directory_tree(False, use_short_tags)
         if verbose: print('Writing XMLfile: {}'.format(filename))
@@ -862,12 +883,14 @@ def main():
         else:
             my_dir.toXML_string(False, use_short_tags)
 
+    # Create message structure
+    elif args.structure:
+        message = args.structure[0]
+        my_message = Message_Structure(version, mode, message)
+        my_message.toXML(filename)
+
     if verbose:
         print(verbose_text)
-
-    # Test creation of message structure
-    # my_orders = Message_Structure(version, mode, 'ORDERS')
-    # my_orders.toXML('test_order_structure.xml')
 
 if __name__ == "__main__":
     main()
