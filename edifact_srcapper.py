@@ -5,6 +5,7 @@ import time
 from bs4 import BeautifulSoup
 from xml.etree import ElementTree as et
 from datetime import datetime
+import logging
 
 #TODO start
 # Quality Checks
@@ -13,8 +14,6 @@ from datetime import datetime
 #TODO end
 
 base_URL = 'https://service.unece.org/trade/untdid/'
-verbose = False
-verbose_text = ''
 
 class Item():
     def __init__(self, tag, name, function):
@@ -144,7 +143,7 @@ class Segment_Dir(Dir):
         tree = et.ElementTree(root)
 
         for i, segment in enumerate(self.segments):
-            if verbose: print('{} segment to XML Node...'.format(segment.tag))
+            logging.info('{} segment to XML Node...'.format(segment.tag))
             segment_tag = et.Element(self.segment_tag_name[version])
             segment_tag.set(self.tag_att_name[version], segment.tag)
             if use_short_tags is False:
@@ -190,8 +189,7 @@ class Composite_Dir(Dir):
         root = et.Element(self.composite_dir_tag_name[version])
         tree = et.ElementTree(root)
         for i, composite_element in enumerate(self.composite_elements):
-            if verbose:
-                print('{} composite_data_element to XML Node...'.format(composite_element.tag))
+            logging.info('{} composite_data_element to XML Node...'.format(composite_element.tag))
             composite_element_tag = et.Element(self.composite_data_element_tag_name[version])
             composite_element_tag.set(self.tag_att_name[version], composite_element.tag)
             if use_short_tags is False:
@@ -233,8 +231,7 @@ class Element_Dir(Dir):
         tree = et.ElementTree(root)
 
         for i, data_element in enumerate(self.data_elements):
-            if verbose:
-                print('{} data_element to XML Node...'.format(data_element.tag))
+            logging.info('{} data_element to XML Node...'.format(data_element.tag))
             data_element_tag = et.Element(self.data_element_tag_name[version])
             data_element_tag.set(self.tag_att_name[version], data_element.tag)
             if use_short_tags == False:
@@ -316,7 +313,7 @@ class Message_Structure():
 
     def toElementTree(self):
         URL = base_URL + self.version.lower() + '/' + self.mode + 'md' + '/' + self.message_type + '_c.htm'
-        if verbose: print('...from {} ...getting tag: {} - '.format(URL, self.message_type), end = '')
+        logging.info('...from {} ...getting tag: {} - '.format(URL, self.message_type))
         tree = None
 
         page = get_page_from_URL(URL)
@@ -326,7 +323,7 @@ class Message_Structure():
             if title == '404 Not Found':
                 raise requests.HTTPError(title)
             else:
-                if verbose: print('OK')
+                logging.info('OK')
                 tree = create_message_element_tree_from_soup(soup, self.message_type, URL)
         return tree
 
@@ -337,7 +334,7 @@ class Message_Structure():
             print(error)
         else:
             with open(filename, 'wb') as f:
-                if verbose: print('Writing XMLfile: {}'.format(filename))
+                logging.info('Writing XMLfile: {}'.format(filename))
                 tree.write(f, encoding='utf-8')
 
 def check_version_type(version, pat=re.compile(r"^[dD][0-9]{2}[abAB]$")):
@@ -365,7 +362,7 @@ def get_page_from_URL(URL):
         try:
             page = requests.get(URL)
         except:
-            if verbose: print('Oops! ... trying again ...', end = '')
+            logging.info('Oops! ... trying again ...')
     return page
 
 def get_tags_from_website(mode, version, type):
@@ -376,15 +373,14 @@ def get_tags_from_website(mode, version, type):
        type: which kind of tags?
             segments: sd, composite data elements: cd, simple_data_element: ed
        returns a list containing all tags"""
-    global verbose_text
     tags = list()
     check_mode_type(mode)
     check_version_type(version)
     URL = base_URL + version.lower() + '/' + mode + type + '/' + mode + type + 'i1.htm'
+    logging.info('Let\'s go!')
+    logging.info('Scrap service.unece.org for EDIFACT segments and returning a list of all tags.')
+    logging.info('...from {} ...getting tag-list: - '.format(URL))
 
-    if verbose: print('Let\'s go!')
-    if verbose: print('Scrap service.unece.org for EDIFACT segments and returning a list of all tags.')
-    if verbose: print('...from {} ...getting tag-list: - '.format(URL), end = '')
     page = get_page_from_URL(URL)
 
     if page is not None:
@@ -398,12 +394,12 @@ def get_tags_from_website(mode, version, type):
                 tags.append(link.text)
             if type == 'ed' and len(link.text) == 4 and link.text.isdigit():
                 tags.append(link.text)
-        if verbose: print('Extracted total tags: {}'.format(len(tags)))
+        logging.info('Extracted total tags: {}'.format(len(tags)))
     return tags
 
 def create_item(mode, version, tag, type):
     URL = base_URL + version.lower() + '/' + mode + type + '/' + mode + type + tag.lower() + '.htm'
-    if verbose: print('...from {} ...getting tag: {} - '.format(URL, tag), end = '')
+    logging.info('...from {} ...getting tag: {} - '.format(URL, tag))
     page = get_page_from_URL(URL)
 
     if page is not None:
@@ -412,7 +408,7 @@ def create_item(mode, version, tag, type):
         if title == '404 Not Found':
             raise requests.HTTPError(title)
         else:
-            if verbose: print('OK')
+            logging.info('OK')
             if type == 'ed':
                 item = get_data_element_from_soup(soup, type, URL)
             else:
@@ -423,10 +419,9 @@ def create_item(mode, version, tag, type):
 
 def create_item_list(mode, version, tags, type):
     """to create and return a list of segment, composite or data_element objects."""
-    global verbose_text
     check_mode_type(mode)
     check_version_type(version)
-    if verbose: print('Getting all single tags from their URL.')
+    logging.info('Getting all single tags from their URL.')
     items = []
     for tag in tags:
         try:
@@ -436,9 +431,11 @@ def create_item_list(mode, version, tags, type):
             continue
         else:
             items.append(item)
-    if verbose: print('Build {} items out of {} tags from {}.'.format(len(items), len(tags), type),  end = '')
-    if verbose and len(items) == len(tags): print(' - Looks good!')
-    elif verbose: print(' - Oops, something is missing!')
+    logging.info('Build {} items out of {} tags from {}.'.format(len(items), len(tags), type))
+    if len(items) == len(tags):
+        logging.info(' - Looks good!')
+    else:
+        logging.info(' - Oops, something is missing!')
     return items
 
 def get_item_from_soup(soup, type, url):
@@ -611,8 +608,7 @@ def create_message_element_tree_from_soup(soup, message_type, url):
     curr_node_stack = []
     curr_node_stack.append(root)
     curr_parent_node = root
-    if verbose:
-        print('Message Type: {}'.format(message_type.upper()))
+    logging.info('Message Type: {}'.format(message_type.upper()))
     for a_tag in a_tags:
         status = 'unknown'
         recurrence = 'unknown'
@@ -626,8 +622,7 @@ def create_message_element_tree_from_soup(soup, message_type, url):
             if '|' not in a_tag.next_sibling and \
                '+' not in a_tag.next_sibling and \
                 not(re.match(r'[0-9]{4}', a_tag.text)):
-                if verbose:
-                    print('---|{}|'.format(a_tag.text))
+                logging.info('---|{}|'.format(a_tag.text))
                 node = et.Element(a_tag.text)
                 # add status attribute
                 if ' M ' in a_tag.next_sibling:
@@ -648,8 +643,7 @@ def create_message_element_tree_from_soup(soup, message_type, url):
                 seg_group_tmp = pattern.search(a_tag.next_sibling)
                 seg_group = seg_group_tmp.group().replace(' ', '_').lower()
                 filler = '---' * (a_tag.next_sibling.count('|') + 1)
-                if verbose:
-                    print('-{}|{}|'.format(filler, seg_group))
+                logging.info('-{}|{}|'.format(filler, seg_group))
                 node = et.Element(seg_group)
                 #add status attribute
                 if ' M ' in a_tag.next_sibling:
@@ -687,8 +681,7 @@ def create_message_element_tree_from_soup(soup, message_type, url):
                 next_sibling = a_tag.next_sibling.split('\n')[0]
                 counter = next_sibling.count('|') + next_sibling.count('+')
                 filler = '---' * (counter)
-                if verbose:
-                    print('---{}|{}|'.format(filler, a_tag.text))
+                logging.info('---{}|{}|'.format(filler, a_tag.text))
                 node = et.Element(a_tag.text)
                 #add status attribute
                 if ' M ' in a_tag.next_sibling:
@@ -749,7 +742,6 @@ def check_tag(tag, type):
     return tag
 
 def main():
-    global verbose
     """used when executed from command line"""
     # help texts
     h_verbose = 'Increase output verbosity'
@@ -784,11 +776,17 @@ def main():
     parser.add_argument("-o", "--output_file", help=h_output, nargs=1)
     parser.add_argument("--short_tags", help=h_short_tags, action="store_true")
     parser.add_argument("-st", "--structure", type=check_message_tag, help=h_structure, nargs=1)
-
     args = parser.parse_args()
+
     if args.verbose:
-        print("verbosity turned on")
-        verbose=True
+        loglevel = 'INFO'
+    else:
+        loglevel = 'WARNING'
+
+    numeric_level = getattr(logging, loglevel.upper())
+    logging.basicConfig(level=numeric_level)
+    logging.info('verbosity turned on')
+
     mode = args.mode
     version = args.version
     use_short_tags = True if args.short_tags == True else False
@@ -820,28 +818,28 @@ def main():
     elif args.full_edifact_dir:
         my_edifact_dir = Edifact_Dir(mode, version)
         edifact_dir = my_edifact_dir.create(False, use_short_tags)
-        if verbose: print('Writing XMLfile: {}'.format(filename))
+        logging.info('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, edifact_dir)
 
     # Create full segment directory
     elif args.segment_dir and args.segment_dir[0] == 'full':
         my_edifact_dir = Edifact_Dir(mode, version)
         my_seg_dir = my_edifact_dir.create_segment_directory_tree(False, use_short_tags)
-        if verbose: print('Writing XMLfile: {}'.format(filename))
+        logging.info('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, my_seg_dir)
 
     # Create full composite directory
     elif args.composite_dir and args.composite_dir[0] == 'full':
         my_edifact_dir = Edifact_Dir(mode, version)
         my_comp_dir = my_edifact_dir.create_composite_directory_tree(False, use_short_tags)
-        if verbose: print('Writing XMLfile: {}'.format(filename))
+        logging.info('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, my_comp_dir)
 
     # Create full element directory
     elif args.element_dir and args.element_dir[0] == 'full':
         my_edifact_dir = Edifact_Dir(mode, version)
         my_ele_dir = my_edifact_dir.create_data_element_directory_tree(False, use_short_tags)
-        if verbose: print('Writing XMLfile: {}'.format(filename))
+        logging.info('Writing XMLfile: {}'.format(filename))
         my_edifact_dir.toXML(filename, my_ele_dir)
 
     # Create xml directories based on given tags
@@ -879,7 +877,7 @@ def main():
 
         if args.output_file:
             my_dir.toXML(args.output_file[0], False, use_short_tags)
-            if verbose: print('Writing XMLfile: {}'.format(filename))
+            logging.info('Writing XMLfile: {}'.format(filename))
         else:
             my_dir.toXML_string(False, use_short_tags)
 
@@ -888,9 +886,6 @@ def main():
         message = args.structure[0]
         my_message = Message_Structure(version, mode, message)
         my_message.toXML(filename)
-
-    if verbose:
-        print(verbose_text)
 
 if __name__ == "__main__":
     main()
