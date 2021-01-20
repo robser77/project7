@@ -313,7 +313,7 @@ class Message_Structure():
 
     def toElementTree(self):
         URL = base_URL + self.version.lower() + '/' + self.mode + 'md' + '/' + self.message_type + '_c.htm'
-        logging.info('...from {} ...getting tag: {} - '.format(URL, self.message_type))
+        logging.info('...from {} ...getting tag: {}'.format(URL, self.message_type))
         tree = None
 
         page = get_page_from_URL(URL)
@@ -397,9 +397,35 @@ def get_tags_from_website(mode, version, type):
         logging.info('Extracted total tags: {}'.format(len(tags)))
     return tags
 
+def get_message_codes_from_website(mode, version):
+    """to scrap service.unece.org for EDIFACT message codes.
+       arguments: mode, version
+       mode: tr (batch), ti (interactive)
+       version: EDIFACT version (ex. d96a)
+       returns a list containing all tags"""
+    message_codes = list()
+    check_mode_type(mode)
+    check_version_type(version)
+    URL = base_URL + version.lower() + '/' + mode + 'md' + '/' + mode + 'md' + 'i1.htm'
+    logging.info('Let\'s go!')
+    logging.info('Scrap service.unece.org for EDIFACT messages and returning a list of all codes.')
+    logging.info('...from {} ...getting codes-list: - '.format(URL))
+
+    page = get_page_from_URL(URL)
+
+    if page is not None:
+        soup = BeautifulSoup(page.content, 'html.parser')
+        a_tags = soup.find_all("a")
+
+        for a_tag in a_tags:
+            if len(a_tag.text) == 6:
+                message_codes.append(a_tag.text)
+        logging.info('Extracted total codes: {}'.format(len(message_codes)))
+    return message_codes
+
 def create_item(mode, version, tag, type):
     URL = base_URL + version.lower() + '/' + mode + type + '/' + mode + type + tag.lower() + '.htm'
-    logging.info('...from {} ...getting tag: {} - '.format(URL, tag))
+    logging.info('...from {} ...getting tag: {}'.format(URL, tag))
     page = get_page_from_URL(URL)
 
     if page is not None:
@@ -433,7 +459,7 @@ def create_item_list(mode, version, tags, type):
             items.append(item)
     logging.info('Build {} items out of {} tags from {}.'.format(len(items), len(tags), type))
     if len(items) == len(tags):
-        logging.info(' - Looks good!')
+        logging.info(' ---> Looks good!')
     else:
         logging.info(' - Oops, something is missing!')
     return items
@@ -592,10 +618,6 @@ def get_data_element_from_soup(soup, type, url):
     item = Data_element(tag, name, function, format, code_list, url)
     return item
 
-def get_message_types_from_website(mode, version, type):
-    """ get all message names from website and return a list including message names. """
-    pass
-
 def create_message_element_tree_from_soup(soup, message_type, url):
     """ create message structure from soup and return element tree. """
     a_tags = soup.find_all("a")
@@ -610,11 +632,14 @@ def create_message_element_tree_from_soup(soup, message_type, url):
     curr_parent_node = root
     logging.info('Message Type: {}'.format(message_type.upper()))
     for a_tag in a_tags:
+        # logging.info('a_tag: {}'.format(a_tag))
         status = 'unknown'
         recurrence = 'unknown'
-        if (re.match(r'[A-Z]{3}', a_tag.text) and \
-            (' M ' in a_tag.next_sibling or \
-             ' C ' in a_tag.next_sibling)) or \
+        if message_type.upper() == 'CREMUL' and a_tag.text == 'MIG':
+            pass
+        elif (re.match(r'[A-Z]{3}', a_tag.text) and \
+            ('  M  ' in a_tag.next_sibling or \
+             '  C  ' in a_tag.next_sibling)) or \
             (re.match(r'[0-9]{4}', a_tag.text) and
              '-- Segment group ' in a_tag.next_sibling):
             # Segments which do not pertain to a group
@@ -622,12 +647,11 @@ def create_message_element_tree_from_soup(soup, message_type, url):
             if '|' not in a_tag.next_sibling and \
                '+' not in a_tag.next_sibling and \
                 not(re.match(r'[0-9]{4}', a_tag.text)):
-                logging.info('---|{}|'.format(a_tag.text))
                 node = et.Element(a_tag.text)
                 # add status attribute
-                if ' M ' in a_tag.next_sibling:
+                if '  M  ' in a_tag.next_sibling:
                     status = 'M'
-                elif ' C ' in a_tag.next_sibling:
+                elif '  C  ' in a_tag.next_sibling:
                     status = 'C'
                 node.set('status', status)
                 # add recurrence attribute
@@ -652,13 +676,12 @@ def create_message_element_tree_from_soup(soup, message_type, url):
                     status = 'C'
                 node.set('status', status)
                 # add recurrence attribute
-                pattern = re.compile(' [0-9]{1,6}--')
+                pattern = re.compile(' [0-9]{1,7}--')
                 recurrence_tmp = pattern.search(a_tag.next_sibling)
                 recurrence = recurrence_tmp.group().replace('--','').strip()
                 node.set('recurrence', recurrence)
-
+                node.set('group', str(seg_group.split('_')[2]))
                 depth = a_tag.next_sibling.count('|')
-
                 if depth == 0:
                     curr_parent_node = root
                     curr_parent_node.append(node)
@@ -676,17 +699,17 @@ def create_message_element_tree_from_soup(soup, message_type, url):
                         curr_parent_node = curr_node_stack[-1]
                         curr_parent_node.append(node)
                         curr_node_stack.append(node)
-
             elif (re.match(r'[A-Z]{3}', a_tag.text)):
+                #logging.info('a_tag 3: {}'.format(a_tag))
                 next_sibling = a_tag.next_sibling.split('\n')[0]
                 counter = next_sibling.count('|') + next_sibling.count('+')
                 filler = '---' * (counter)
                 logging.info('---{}|{}|'.format(filler, a_tag.text))
                 node = et.Element(a_tag.text)
                 #add status attribute
-                if ' M ' in a_tag.next_sibling:
+                if '  M  ' in a_tag.next_sibling:
                     status = 'M'
-                elif ' C ' in a_tag.next_sibling:
+                elif '  C  ' in a_tag.next_sibling:
                     status = 'C'
                 node.set('status', status)
                 # add recurrence attribute
@@ -748,7 +771,7 @@ def main():
     h_version = 'EDIFACT release version (ex. d01a)'
     h_mode = 'Which EDIFACT mode: tr (batch) or ti (interactive)?'
     h_segment = 'Get specific text description of segment  from segment directory'
-    h_composite = 'Get specific text description of composite element from composite directory'
+    h_composite = 'Get speversion, cific text description of composite element from composite directory'
     h_element = 'Get specific text description of data element from segment element directory'
     h_sd = 'Get specific segments from segment directory and ouput \
             as xml. Provide comma-separated list of segment tags or "full" for complete directory.'
@@ -784,7 +807,7 @@ def main():
         loglevel = 'WARNING'
 
     numeric_level = getattr(logging, loglevel.upper())
-    logging.basicConfig(level=numeric_level)
+    logging.basicConfig(level=numeric_level, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
     logging.info('verbosity turned on')
 
     mode = args.mode
@@ -882,9 +905,18 @@ def main():
             my_dir.toXML_string(False, use_short_tags)
 
     # Create message structure
+    elif args.structure and args.structure[0] == 'full':
+        logging.info('here we are: {}'.format(args.structure[0]))
+        message_codes = get_message_codes_from_website(mode, version)
+        print(message_codes)
+        for message_code in message_codes:
+            filename = message_code.lower() + '_' + mode + '_' + version + '.xml'
+            my_message = Message_Structure(version, mode, message_code)
+            my_message.toXML(filename)
+
     elif args.structure:
-        message = args.structure[0]
-        my_message = Message_Structure(version, mode, message)
+        message_code = args.structure[0]
+        my_message = Message_Structure(version, mode, message_code)
         my_message.toXML(filename)
 
 if __name__ == "__main__":
