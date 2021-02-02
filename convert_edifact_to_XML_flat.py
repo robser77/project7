@@ -14,7 +14,7 @@ def convert_to_xml_flat(data):
 
     if data.startswith('UNA'):
         UNA_segment = data[0:9]
-        logging.info('Special characters used to'
+        logging.info('Special characters used to '
                       + 'interpret the the message: {}'.format(UNA_segment))
         component_data_element_separator = UNA_segment[3]
         data_element_separator = UNA_segment[4]
@@ -22,12 +22,41 @@ def convert_to_xml_flat(data):
         release_charcater = UNA_segment[6]
         segment_terminator = UNA_segment[8]
 
+    special_characters = component_data_element_separator \
+                         + data_element_separator \
+                         + decimal_mark \
+                         + release_charcater \
+                         + segment_terminator
+
     root = etree.Element('root')
     for count, line in enumerate(data.split(segment_terminator)):
         if count == 1 and not (line.startswith('UNB') or line.startswith('UNA')):
             logging.warning('Edifact not starting with UNA or UNB segment!')
-        tag = line[0:3]
-        if len(tag) > 0: root.append(etree.Element(tag))
+
+        elements = line.split('+')
+        tag_name = elements[0][0:3]
+        if len(tag_name) > 0: tag = etree.SubElement(root, tag_name)
+        if tag_name == 'UNA':
+            tag.set('special_characters', special_characters)
+
+        if tag_name != 'UNA':
+            for counter, element in enumerate(elements):
+                if ':' in element:
+                    composites = element.split(':')
+                    pos = counter * 10
+                    composite_tag_name = 'COMPOSITE_' + str(pos)
+                    composite_tag = etree.SubElement(tag, composite_tag_name)
+                    for counter2, component in enumerate(composites, start = 1):
+                        sub_pos = counter2 * 10
+                        component_tag_name = 'COMPONENT_' + str(pos) + '_' + str(sub_pos)
+                        component_tag = etree.SubElement(composite_tag, component_tag_name)
+                        component_tag.text = component
+                elif counter > 0:
+                    simple = element
+                    pos = counter * 10
+                    simple_tag_name = 'SIMPLE_' + str(pos)
+                    simple_tag = etree.SubElement(tag, simple_tag_name)
+                    simple_tag.text = simple
     return root
 
 def main():

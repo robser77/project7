@@ -763,7 +763,7 @@ def check_tag(tag, type):
     elif not pat.match(tag) and tag != 'full':
         raise ValueError(error)
     return tag
-
+    
 def main():
     """used when executed from command line"""
     # help texts
